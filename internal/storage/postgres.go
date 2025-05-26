@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"adtime-bot/internal/storage/migrations"
 	"context"
 	"database/sql"
 	"fmt"
@@ -69,7 +68,7 @@ func NewPostgresStorage(ctx context.Context, cfg Config, logger *zap.Logger) (*P
 	db.SetConnMaxLifetime(5 * time.Minute)
 
 	logger.Info("Running database migrations...")
-	if err := migrations.RunMigrations(ctx, db, "postgres"); err != nil {
+	if err := RunMigrations(ctx, db, "postgres"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}

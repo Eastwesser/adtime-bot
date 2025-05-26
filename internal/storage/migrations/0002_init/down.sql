@@ -1,1 +1,0 @@
-DELETE FROM textures WHERE id IN ('tex1', 'tex2', 'tex3');

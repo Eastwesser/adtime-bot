@@ -4,7 +4,10 @@ FROM golang:1.23-alpine
 RUN apk add --no-cache git \
     && go install github.com/pressly/goose/v3/cmd/goose@latest
 
-WORKDIR /app
+WORKDIR /app/migrations
 COPY . .
+
+# Create the migrations directory in container
+RUN mkdir -p /app/migrations
 
 ENTRYPOINT ["goose"]

@@ -57,8 +57,9 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./internal/storage/migrations:/migrations
-    command: ["-dir", "/migrations", "up"]
+      - ./internal/storage/migrations:/app/migrations
+    working_dir: /app/migrations
+    command: ["-path", ".", "up"]
     healthcheck:
       test: ["CMD", "goose", "-dir", "/migrations", "postgres", "$$GOOSE_DBSTRING", "status"]
       interval: 10s
