@@ -2,6 +2,7 @@
 -- Enable UUID extension if not exists
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+
 -- Create textures table with improved constraints
 CREATE TABLE textures (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -9,8 +10,8 @@ CREATE TABLE textures (
     price_per_dm2 DECIMAL(10, 2) NOT NULL CHECK (price_per_dm2 > 0),
     image_url     VARCHAR(512),
     in_stock      BOOLEAN        NOT NULL DEFAULT TRUE,
-    created_at    TIMESTAMP      NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMP      NOT NULL DEFAULT NOW(),
+    created_at    TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
     CONSTRAINT unique_texture_name UNIQUE (name)
 );
 

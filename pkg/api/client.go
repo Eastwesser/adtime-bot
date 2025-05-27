@@ -36,15 +36,15 @@ type OrderRequest struct {
 	Contact   string  `json:"contact"`
 }
 
-func NewClient(baseURL, token string, logger *zap.Logger) *Client {
-	return &Client{
-		baseURL: baseURL,
-		token:   token,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		logger: logger,
-	}
+func NewClient(baseURL, token string, logger *zap.Logger, timeout time.Duration) *Client {
+    return &Client{
+        baseURL: baseURL,
+        token:   token,
+        httpClient: &http.Client{
+            Timeout: timeout,
+        },
+        logger: logger,
+    }
 }
 
 func (c *Client) GetTextures(ctx context.Context) ([]Texture, error) {

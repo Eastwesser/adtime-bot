@@ -12,57 +12,64 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"go.uber.org/zap"
 	_ "github.com/lib/pq"
 )
 
-// ENTRY POINT
-
 func main() {
-	// Инициализация логгера
+	// Initialize logger
 	zapLogger, err := logger.New()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Failed to initialize logger: %v\n", err)
+		os.Exit(1)
 	}
 	defer zapLogger.Sync()
 
-	// Загрузка конфигурации
-	cfg := config.Load()
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		zapLogger.Fatal("Failed to load config", zap.Error(err))
+	}
 
-	// Инициализация Redis клиента
-	redisClient := redis.New(cfg.RedisAddr, "", 0, 24*time.Hour)
+	// Initialize Redis client
+	redisClient := redis.New(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisTTL)
+	defer redisClient.Close()
 
-	// Инициализация PostgreSQL хранилища
+	// Initialize PostgreSQL storage
 	pgStorage, err := storage.NewPostgresStorage(context.Background(), storage.Config{
-		Host:     cfg.DBHost,
-		Port:     cfg.DBPort,
-		User:     cfg.DBUser,
-		Password: cfg.DBPassword,
-		DBName:   cfg.DBName,
+		Host:            cfg.DBHost,
+		Port:            cfg.DBPort,
+		User:            cfg.DBUser,
+		Password:        cfg.DBPassword,
+		DBName:          cfg.DBName,
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		ConnMaxLifetime: cfg.DBConnMaxLifetime,
+		ConnMaxIdleTime: cfg.DBConnMaxIdleTime,
 	}, zapLogger)
 	if err != nil {
 		zapLogger.Fatal("Failed to init PostgreSQL storage", zap.Error(err))
 	}
 	defer pgStorage.Close()
 
-	// Инициализация API клиента
-	apiClient := api.NewClient(cfg.APIBaseURL, cfg.APIKey, zapLogger)
+	// Initialize API client
+	apiClient := api.NewClient(cfg.APIBaseURL, cfg.APIKey, zapLogger, cfg.HTTPRequestTimeout)
 
-	// Создание бота
+	// Create bot instance
 	tgBot, err := bot.New(
 		cfg.TelegramToken,
 		apiClient,
 		redisClient,
 		pgStorage,
 		zapLogger,
+		cfg,
 	)
 	if err != nil {
 		zapLogger.Fatal("Failed to create bot", zap.Error(err))
 	}
 
-	// Обработка сигналов завершения
+	// Handle shutdown signals
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
@@ -70,7 +77,8 @@ func main() {
 	)
 	defer cancel()
 
-	// Запуск бота
+	// Start the bot
+	zapLogger.Info("Starting bot")
 	if err := tgBot.Start(ctx); err != nil {
 		zapLogger.Fatal("Bot stopped with error", zap.Error(err))
 	}

@@ -3,11 +3,10 @@ package bot
 import (
 	"adtime-bot/pkg/redis"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
-
-// BOT STATE
 
 type UserState struct {
 	Step        string `json:"step"`
@@ -25,39 +24,20 @@ type StateStorage struct {
 	ttl   time.Duration
 }
 
-
-func (s *StateStorage) ClearState(chatID int64) {
-	_ = s.Clear(context.Background(), chatID)
+func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
+    return s.Clear(ctx, chatID)
 }
 
-func (s *StateStorage) SetWaitingForPhoneNumber(chatID int64) {
-	_ = s.SetStep(context.Background(), chatID, "waiting_phone_number")
-}
-
-func (s *StateStorage) SetWaitingForDateConfirmation(chatID int64) {
-	_ = s.SetStep(context.Background(), chatID, "waiting_date_confirmation")
-}
-
-func (s *StateStorage) IsWaitingForManualDateInput(chatID int64) bool {
-	state, _ := s.Get(context.Background(), chatID)
-	return state.Step == "waiting_manual_date_input"
-}
-
-func (s *StateStorage) SetWaitingForManualDateInput(chatID int64) {
-	_ = s.SetStep(context.Background(), chatID, "waiting_manual_date_input")
-}
-
-func (s *StateStorage) SetWaitingDimensions(chatID int64) {
-	_ = s.SetStep(context.Background(), chatID, "waiting_dimensions")
-}
-
-func (s *StateStorage) SetWaitingForServiceInput(chatID int64) {
-	_ = s.SetStep(context.Background(), chatID, "waiting_service_input")
-}
-
-func (s *StateStorage) SetWaitingForDateSelection(chatID int64) {
-	_ = s.SetStep(context.Background(), chatID, "waiting_date_selection")
-}
+const (
+	StepPrivacyAgreement = "waiting_privacy_agreement"
+	StepServiceSelection = "waiting_service_selection"
+	StepServiceInput     = "waiting_service_input"
+	StepDimensions       = "waiting_dimensions"
+	StepDateSelection    = "waiting_date_selection"
+	StepManualDateInput  = "waiting_manual_date_input"
+	StepDateConfirmation = "waiting_date_confirmation"
+	StepPhoneNumber      = "waiting_phone_number"
+)
 
 func NewStateStorage(redis *redis.Client) *StateStorage {
 	return &StateStorage{
@@ -67,17 +47,39 @@ func NewStateStorage(redis *redis.Client) *StateStorage {
 }
 
 func (s *StateStorage) Save(ctx context.Context, chatID int64, state UserState) error {
-	return s.redis.SaveState(ctx, chatID, state)
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+
+	if err := s.redis.Set(ctx, getStateKey(chatID), data, s.ttl); err != nil {
+		return fmt.Errorf("failed to save state: %w", err)
+	}
+	return nil
 }
 
 func (s *StateStorage) Get(ctx context.Context, chatID int64) (UserState, error) {
+	data, err := s.redis.Get(ctx, getStateKey(chatID))
+	if err != nil {
+		return UserState{}, fmt.Errorf("failed to get state: %w", err)
+	}
+
 	var state UserState
-	err := s.redis.GetState(ctx, chatID, &state)
-	return state, err
+	if err := json.Unmarshal(data, &state); err != nil {
+		return UserState{}, fmt.Errorf("failed to unmarshal state: %w", err)
+	}
+	return state, nil
+}
+
+func (s *StateStorage) GetFullState(ctx context.Context, chatID int64) (UserState, error) {
+	return s.Get(ctx, chatID)
 }
 
 func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
-	return s.redis.ClearState(ctx, chatID)
+	if err := s.redis.Del(ctx, getStateKey(chatID)); err != nil {
+		return fmt.Errorf("failed to clear state: %w", err)
+	}
+	return nil
 }
 
 func (s *StateStorage) SetStep(ctx context.Context, chatID int64, step string) error {
@@ -85,7 +87,6 @@ func (s *StateStorage) SetStep(ctx context.Context, chatID int64, step string) e
 	if err != nil {
 		state = UserState{}
 	}
-
 	state.Step = step
 	return s.Save(ctx, chatID, state)
 }
@@ -95,92 +96,56 @@ func (s *StateStorage) SetDimensions(ctx context.Context, chatID int64, width, h
 	if err != nil {
 		state = UserState{}
 	}
-
 	state.WidthCM = width
 	state.HeightCM = height
 	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) IsWaitingForPrivacyAgreement(chatID int64) bool {
-	state, _ := s.Get(context.Background(), chatID)
-	return state.Step == "waiting_privacy_agreement"
-}
-
-func (s *StateStorage) SetWaitingForPrivacyAgreement(chatID int64) error {
-	return s.SetStep(context.Background(), chatID, "waiting_privacy_agreement")
-}
-
-func (s *StateStorage) IsWaitingForServiceSelection(chatID int64) bool {
-	state, _ := s.Get(context.Background(), chatID)
-	return state.Step == "waiting_service_selection"
-}
-
-func (s *StateStorage) SetWaitingForServiceSelection(chatID int64) error {
-	return s.SetStep(context.Background(), chatID, "waiting_service_selection")
-}
-
-func (s *StateStorage) SetService(chatID int64, service string) error {
-	state, err := s.Get(context.Background(), chatID)
+func (s *StateStorage) SetService(ctx context.Context, chatID int64, service string) error {
+	state, err := s.Get(ctx, chatID)
 	if err != nil {
 		state = UserState{}
 	}
-
 	state.Service = service
-	return s.Save(context.Background(), chatID, state)
+	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) SetDate(chatID int64, date string) error {
-	state, err := s.Get(context.Background(), chatID)
+func (s *StateStorage) SetDate(ctx context.Context, chatID int64, date string) error {
+	state, err := s.Get(ctx, chatID)
 	if err != nil {
 		state = UserState{}
 	}
-
 	state.Date = date
-	return s.Save(context.Background(), chatID, state)
+	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) SetPhoneNumber(chatID int64, phone string) error {
-	state, err := s.Get(context.Background(), chatID)
+func (s *StateStorage) SetPhoneNumber(ctx context.Context, chatID int64, phone string) error {
+	state, err := s.Get(ctx, chatID)
 	if err != nil {
 		state = UserState{}
 	}
-
 	state.PhoneNumber = phone
-	return s.Save(context.Background(), chatID, state)
+	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) IsWaitingDimensions(id int64) bool {
-	state, _ := s.Get(context.Background(), id)
-	return state.Step == "waiting_dimensions"
-}
-
-func (s *StateStorage) IsWaitingContact(id int64) bool {
-	state, _ := s.Get(context.Background(), id)
-	return state.Step == "waiting_contact"
-}
-
-func (s *StateStorage) IsWaitingForDateSelection(id int64) bool {
-	state, _ := s.Get(context.Background(), id)
-	return state.Step == "waiting_date_selection"
-}
-
-func (s *StateStorage) IsWaitingForPhoneNumber(id int64) bool {
-	state, _ := s.Get(context.Background(), id)
-	return state.Step == "waiting_phone_number"
-}
-
-func (s *StateStorage) GetDimensions(chatID int64) (width, height int) {
-	state, _ := s.Get(context.Background(), chatID)
-	return state.WidthCM, state.HeightCM
-}
-
-func (s *StateStorage) SetTexture(chatID int64, textureID string, price float64) error {
-	state, err := s.Get(context.Background(), chatID)
+func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
+	state, err := s.Get(ctx, chatID)
 	if err != nil {
 		state = UserState{}
 	}
-
 	state.TextureID = textureID
 	state.Price = fmt.Sprintf("%.2f", price)
-	return s.Save(context.Background(), chatID, state)
+	return s.Save(ctx, chatID, state)
+}
+
+func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, height int, err error) {
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		return 0, 0, err
+	}
+	return state.WidthCM, state.HeightCM, nil
+}
+
+func getStateKey(chatID int64) string {
+	return fmt.Sprintf("state:%d", chatID)
 }

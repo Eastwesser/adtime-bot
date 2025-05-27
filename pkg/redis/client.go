@@ -16,6 +16,24 @@ type Client struct {
 	ttl    time.Duration
 }
 
+func (c *Client) Del(ctx context.Context, key string) error {
+	return c.client.Del(ctx, key).Err()
+}
+
+func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
+	return c.client.Get(ctx, key).Bytes()
+}
+
+func (c *Client) Set(ctx context.Context, key string, data []byte, ttl time.Duration) error {
+	return c.client.Set(ctx, key, data, ttl).Err()
+}
+
+func (c *Client) Close() {
+	if c.client != nil {
+		_ = c.client.Close()
+	}
+}
+
 func New(addr, password string, db int, ttl time.Duration) *Client {
 	return &Client{
 		client: redis.NewClient(&redis.Options{
