@@ -191,7 +191,11 @@ func (b *Bot) showTextures(ctx context.Context, chatID int64) {
     if textures[0].ImageURL != "" {
         photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
         photo.Caption = "Образцы доступных текстур:"
-        b.sendMessage(photo)
+        if _, err := b.bot.Send(photo); err != nil {  // Use b.bot.Send directly for photos
+            b.logger.Error("Failed to send photo",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+        }
     }
 
     msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
@@ -376,17 +380,6 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         return
     }
 
-	// Export to Excel
-    if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
-        b.logger.Error("Failed to export order to Excel",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        
-        // Notify admin about export failure
-        b.sendAdminNotification(ctx, 
-            fmt.Sprintf("⚠️ Failed to export order #%d to Excel: %v", order.ID, err))
-    }
-
     width, height, err := b.state.GetDimensions(ctx, chatID)
     if err != nil {
         b.logger.Error("Failed to get dimensions",
@@ -420,13 +413,15 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         CreatedAt:   time.Now(),
     }
 
-    if err := b.storage.SaveOrder(ctx, order); err != nil {
+    orderID, err := b.storage.SaveOrder(ctx, order)
+    if err != nil {
         b.logger.Error("Failed to save order",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
         b.sendError(chatID, "Ошибка при сохранении заказа")
         return
     }
+    order.ID = orderID
 
     // Send confirmation to user
     b.sendMessage(tgbotapi.NewMessage(chatID,
@@ -441,6 +436,10 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         b.logger.Error("Failed to export order to Excel",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
+        
+        // Notify admin about export failure
+        b.sendAdminNotification(ctx, 
+            fmt.Sprintf("⚠️ Failed to export order #%d to Excel: %v", order.ID, err))
     }
 
     if err := b.state.ClearState(ctx, chatID); err != nil {
@@ -449,7 +448,6 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
             zap.Error(err))
     }
 }
-
 
 func isValidPhoneNumber(phone string) bool {
 	if len(phone) < 10 {
