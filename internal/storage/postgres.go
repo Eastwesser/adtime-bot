@@ -39,7 +39,7 @@ type Order struct {
 }
 
 
-type Config struct {
+type ConfigPostgres struct {
 	Host            string
 	Port            int
 	User            string
@@ -56,7 +56,7 @@ type PostgresStorage struct {
 	logger *zap.Logger
 }
 
-func NewPostgresStorage(ctx context.Context, cfg Config, logger *zap.Logger) (*PostgresStorage, error) {
+func NewPostgresStorage(ctx context.Context, cfg ConfigPostgres, logger *zap.Logger) (*PostgresStorage, error) {
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName)
 
