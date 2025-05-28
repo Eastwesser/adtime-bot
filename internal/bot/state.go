@@ -8,6 +8,17 @@ import (
 	"time"
 )
 
+const (
+	StepPrivacyAgreement = "waiting_privacy_agreement"
+	StepServiceSelection = "waiting_service_selection"
+	StepServiceInput     = "waiting_service_input"
+	StepDimensions       = "waiting_dimensions"
+	StepDateSelection    = "waiting_date_selection"
+	StepManualDateInput  = "waiting_manual_date_input"
+	StepDateConfirmation = "waiting_date_confirmation"
+	StepPhoneNumber      = "waiting_phone_number"
+)
+
 type UserState struct {
 	Step        string `json:"step"`
 	Service     string `json:"service"`
@@ -15,7 +26,7 @@ type UserState struct {
 	PhoneNumber string `json:"phone_number"`
 	WidthCM     int    `json:"width_cm"`
 	HeightCM    int    `json:"height_cm"`
-	TextureID   int    `json:"texture_id"`
+	TextureID   string `json:"texture_id"`
 	Price       string `json:"price"`
 }
 
@@ -28,21 +39,6 @@ type State interface {
     GetTextureID(ctx context.Context, chatID int64) (string, error)
     SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error
 }
-
-func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
-    return s.Clear(ctx, chatID)
-}
-
-const (
-	StepPrivacyAgreement = "waiting_privacy_agreement"
-	StepServiceSelection = "waiting_service_selection"
-	StepServiceInput     = "waiting_service_input"
-	StepDimensions       = "waiting_dimensions"
-	StepDateSelection    = "waiting_date_selection"
-	StepManualDateInput  = "waiting_manual_date_input"
-	StepDateConfirmation = "waiting_date_confirmation"
-	StepPhoneNumber      = "waiting_phone_number"
-)
 
 func NewStateStorage(redis *redis.Client) *StateStorage {
 	return &StateStorage{
@@ -85,6 +81,10 @@ func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
 		return fmt.Errorf("failed to clear state: %w", err)
 	}
 	return nil
+}
+
+func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
+    return s.Clear(ctx, chatID)
 }
 
 func (s *StateStorage) SetStep(ctx context.Context, chatID int64, step string) error {
@@ -133,14 +133,22 @@ func (s *StateStorage) SetPhoneNumber(ctx context.Context, chatID int64, phone s
 	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID int, price float64) error {
+func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
     state, err := s.Get(ctx, chatID)
     if err != nil {
         state = UserState{}
     }
-    price := calculatePrice(width, height, texture.PricePerDM2)
+    state.TextureID = textureID
     state.Price = fmt.Sprintf("%.2f", price)
     return s.Save(ctx, chatID, state)
+}
+
+func (s *StateStorage) GetTextureID(ctx context.Context, chatID int64) (string, error) {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        return "", err
+    }
+    return state.TextureID, nil
 }
 
 func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, height int, err error) {
