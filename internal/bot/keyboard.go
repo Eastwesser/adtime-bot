@@ -4,7 +4,6 @@ import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 // BOT KEYBOARDS
 
-
 func (b *Bot) CreateDateSelectionKeyboard() tgbotapi.ReplyKeyboardMarkup {
     return tgbotapi.NewReplyKeyboard(
         tgbotapi.NewKeyboardButtonRow(
