@@ -47,12 +47,13 @@ type PostgresStorage struct {
 
 func NewPostgresStorage(ctx context.Context, cfg config.Config, logger *zap.Logger) (*PostgresStorage, error) {
     
-    connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		cfg.Database.Host, 
-		cfg.Database.Port, 
-		cfg.Database.User, 
-		cfg.Database.Password, 
-		cfg.Database.Name,
+    connStr := fmt.Sprintf(
+        "host=%s port=%d user=%s password=%s dbname=%s sslmode=require",
+        cfg.Database.Host, 
+        cfg.Database.Port, 
+        cfg.Database.User, 
+        cfg.Database.Password, 
+        cfg.Database.Name,
     )
 
 	var db *sql.DB
