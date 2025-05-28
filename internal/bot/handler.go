@@ -12,6 +12,26 @@ import (
 	"go.uber.org/zap"
 )
 
+func (b *Bot) handleStart(ctx context.Context, chatID int64) {
+    text := `Привет! 👋
+
+⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
+Используя этого бота, вы соглашаетесь на обработку персональных данных.
+
+Если всё ок — нажмите кнопку ниже 👇`
+
+    msg := tgbotapi.NewMessage(chatID, text)
+    msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
+    b.sendMessage(msg)
+    
+    if err := b.state.SetStep(ctx, chatID, StepPrivacyAgreement); err != nil {
+        b.logger.Error("Failed to set privacy agreement state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
+}
+
+
 func (b *Bot) handleCommand(ctx context.Context, chatID int64, command string) {
 	switch command {
 	case "start":
@@ -32,35 +52,16 @@ func (b *Bot) handleUnknownCommand(ctx context.Context, chatID int64) {
 }
 
 func (b *Bot) handleHelp(ctx context.Context, chatID int64) {
-	helpText := `Доступные команды:
-	/start - Начать работу с ботом
-	/help - Показать эту справку
+    helpText := `Доступные команды:
+		/start - Начать работу с ботом
+		/help - Показать эту справку
 
-	Если у вас возникли проблемы, свяжитесь с поддержкой.`
-	b.sendMessage(tgbotapi.NewMessage(chatID, helpText))
-}
-
-func (b *Bot) handleStart(ctx context.Context, chatID int64) {
-	text := `Привет! 👋
-
-	⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-	Используя этого бота, вы соглашаетесь на обработку персональных данных.
-
-	Если всё ок — нажмите кнопку ниже 👇`
-
-	msg := tgbotapi.NewMessage(chatID, text)
-	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("✅ Продолжить"),
-		),
-	)
-
-	b.sendMessage(msg)
-	if err := b.state.SetStep(ctx, chatID, StepPrivacyAgreement); err != nil {
-		b.logger.Error("Failed to set privacy agreement state",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-	}
+		Если у вас возникли проблемы, свяжитесь с поддержкой.
+	`
+    
+    msg := tgbotapi.NewMessage(chatID, helpText)
+    msg.ReplyMarkup = b.CreateMainMenuKeyboard()
+    b.sendMessage(tgbotapi.NewMessage(chatID, helpText))
 }
 
 func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text string) {
@@ -99,22 +100,43 @@ func (b *Bot) handleServiceSelection(ctx context.Context, chatID int64, text str
 	}
 }
 
-func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string) {
-	if err := b.state.SetService(ctx, chatID, text); err != nil {
-		b.logger.Error("Failed to set service",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-		b.sendError(chatID, "Ошибка при сохранении услуги")
-		return
-	}
+// func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string) {
+// 	if err := b.state.SetService(ctx, chatID, text); err != nil {
+// 		b.logger.Error("Failed to set service",
+// 			zap.Int64("chat_id", chatID),
+// 			zap.Error(err))
+// 		b.sendError(chatID, "Ошибка при сохранении услуги")
+// 		return
+// 	}
 
-	msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
-	b.sendMessage(msg)
-	if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
-		b.logger.Error("Failed to set dimensions state",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-	}
+// 	msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
+// 	b.sendMessage(msg)
+// 	if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
+// 		b.logger.Error("Failed to set dimensions state",
+// 			zap.Int64("chat_id", chatID),
+// 			zap.Error(err))
+// 	}
+// }
+
+func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string) {
+    if err := b.state.SetService(ctx, chatID, text); err != nil {
+        b.logger.Error("Failed to set service",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при сохранении услуги")
+        return
+    }
+
+    // Show service type selection keyboard
+    msg := tgbotapi.NewMessage(chatID, "Выберите тип услуги:")
+    msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
+    b.sendMessage(msg)
+    
+    if err := b.state.SetStep(ctx, chatID, StepServiceType); err != nil {
+        b.logger.Error("Failed to set service type state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
 }
 
 func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text string) {
@@ -322,7 +344,18 @@ func (b *Bot) handleDateConfirmation(ctx context.Context, chatID int64, text str
 }
 
 func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
-    // Validate phone number format
+    
+	msg := tgbotapi.NewMessage(chatID, "Как вам удобно предоставить контактные данные?")
+    msg.ReplyMarkup = b.CreatePhoneInputKeyboard()
+    b.sendMessage(msg)
+    
+    if err := b.state.SetStep(ctx, chatID, StepContactMethod); err != nil {
+        b.logger.Error("Failed to set contact method state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
+	
+	// Validate phone number format
     if !IsValidPhoneNumber(text) {
         b.sendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567)")
         return
@@ -511,4 +544,46 @@ func (b *Bot) showTextures(ctx context.Context, chatID int64) {
     //     tgbotapi.NewInlineKeyboardRow(buttons...),
     // )
     // b.sendMessage(msg)
+}
+
+func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) {
+    // Validate service type
+    validServices := map[string]bool{
+        "Печать наклеек": true,
+        "Другая услуга":  true,
+    }
+    
+    if !validServices[text] {
+        b.sendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
+        return
+    }
+
+    if err := b.state.SetServiceType(ctx, chatID, text); err != nil {
+        b.logger.Error("Failed to set service type",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при сохранении типа услуги")
+        return
+    }
+
+    msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
+    b.sendMessage(msg)
+    
+    if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
+        b.logger.Error("Failed to set dimensions state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
+}
+
+func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string) {
+    if text == "Ввести вручную" {
+        msg := tgbotapi.NewMessage(chatID, "Введите ваш номер телефона в формате +79123456789:")
+        b.sendMessage(msg)
+        if err := b.state.SetStep(ctx, chatID, StepPhoneNumber); err != nil {
+            b.logger.Error("Failed to set phone number state",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+        }
+    }
 }

@@ -9,25 +9,29 @@ import (
 )
 
 const (
-	StepPrivacyAgreement = "waiting_privacy_agreement"
-	StepServiceSelection = "waiting_service_selection"
-	StepServiceInput     = "waiting_service_input"
-	StepDimensions       = "waiting_dimensions"
-	StepDateSelection    = "waiting_date_selection"
-	StepManualDateInput  = "waiting_manual_date_input"
-	StepDateConfirmation = "waiting_date_confirmation"
-	StepPhoneNumber      = "waiting_phone_number"
+    StepPrivacyAgreement = "privacy_agreement"
+    StepServiceSelection = "service_selection"
+    StepServiceInput     = "service_input"
+    StepServiceType      = "service_type"  // New state
+    StepDimensions       = "dimensions"
+    StepDateSelection    = "date_selection"
+    StepManualDateInput  = "manual_date_input"
+    StepDateConfirmation = "date_confirmation"
+    StepContactMethod    = "contact_method" // New state
+    StepPhoneNumber      = "phone_number"
 )
 
+// Update UserState struct to include ServiceType
 type UserState struct {
-	Step        string `json:"step"`
-	Service     string `json:"service"`
-	Date        string `json:"date"`
-	PhoneNumber string `json:"phone_number"`
-	WidthCM     int    `json:"width_cm"`
-	HeightCM    int    `json:"height_cm"`
-	TextureID   string `json:"texture_id"`
-	Price       string `json:"price"`
+    Step         string `json:"step"`
+    Service      string `json:"service"`
+    ServiceType  string `json:"service_type"` // New field
+    Date         string `json:"date"`
+    PhoneNumber  string `json:"phone_number"`
+    WidthCM      int    `json:"width_cm"`
+    HeightCM     int    `json:"height_cm"`
+    TextureID    string `json:"texture_id"`
+    Price        string `json:"price"`
 }
 
 type StateStorage struct {
@@ -162,3 +166,14 @@ func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, 
 func getStateKey(chatID int64) string {
 	return fmt.Sprintf("state:%d", chatID)
 }
+
+func (s *StateStorage) SetServiceType(ctx context.Context, chatID int64, serviceType string) error {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        state = UserState{}
+    }
+    state.ServiceType = serviceType
+    return s.Save(ctx, chatID, state)
+}
+
+

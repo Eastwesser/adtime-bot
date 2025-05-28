@@ -59,16 +59,18 @@ func New(
 }
 
 func (b *Bot) registerHandlers() {
-	b.handlers = map[string]func(context.Context, int64, string){
-		StepPrivacyAgreement:   b.handlePrivacyAgreement,
-		StepServiceSelection:   b.handleServiceSelection,
-		StepServiceInput:       b.handleServiceInput,
-		StepDimensions:         b.handleDimensionsSize,
-		StepDateSelection:      b.handleDateSelection,
-		StepManualDateInput:    b.handleManualDateInput,
-		StepDateConfirmation:   b.handleDateConfirmation,
-		StepPhoneNumber:        b.handlePhoneNumber,
-	}
+    b.handlers = map[string]func(context.Context, int64, string){
+        StepPrivacyAgreement:   b.handlePrivacyAgreement,
+        StepServiceSelection:   b.handleServiceSelection,
+        StepServiceInput:       b.handleServiceInput,
+        StepServiceType:        b.handleServiceType, // New handler
+        StepDimensions:         b.handleDimensionsSize,
+        StepDateSelection:      b.handleDateSelection,
+        StepManualDateInput:    b.handleManualDateInput,
+        StepDateConfirmation:   b.handleDateConfirmation,
+        StepContactMethod:      b.handleContactMethod, // New handler
+        StepPhoneNumber:        b.handlePhoneNumber,
+    }
 }
 
 func (b *Bot) Start(ctx context.Context) error {
@@ -98,6 +100,14 @@ func (b *Bot) Start(ctx context.Context) error {
 
 func (b *Bot) processMessage(ctx context.Context, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
+    
+    // Handle contact sharing
+    if msg.Contact != nil {
+        if state, err := b.state.Get(ctx, chatID); err == nil && state.Step == StepContactMethod {
+            b.handlePhoneNumber(ctx, chatID, msg.Contact.PhoneNumber)
+            return
+        }
+    }
 	b.logger.Debug("Processing message",
 		zap.Int64("chat_id", chatID),
 		zap.String("text", msg.Text))
@@ -165,3 +175,4 @@ func (b *Bot) sendError(chatID int64, text string) {
 //         }
 //     }
 // }
+
