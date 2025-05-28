@@ -15,7 +15,7 @@ type UserState struct {
 	PhoneNumber string `json:"phone_number"`
 	WidthCM     int    `json:"width_cm"`
 	HeightCM    int    `json:"height_cm"`
-	TextureID   string `json:"texture_id"`
+	TextureID   int64  `json:"texture_id"`
 	Price       string `json:"price"`
 }
 
@@ -128,14 +128,14 @@ func (s *StateStorage) SetPhoneNumber(ctx context.Context, chatID int64, phone s
 	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
-	state, err := s.Get(ctx, chatID)
-	if err != nil {
-		state = UserState{}
-	}
-	state.TextureID = textureID
-	state.Price = fmt.Sprintf("%.2f", price)
-	return s.Save(ctx, chatID, state)
+func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID int64, price float64) error {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        state = UserState{}
+    }
+    state.TextureID = textureID // This was missing before
+    state.Price = fmt.Sprintf("%.2f", price)
+    return s.Save(ctx, chatID, state)
 }
 
 func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, height int, err error) {

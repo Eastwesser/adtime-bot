@@ -25,17 +25,17 @@ type Texture struct {
 
 // Order represents a customer order
 type Order struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	WidthCM     int       `json:"width_cm"`
-	HeightCM    int       `json:"height_cm"`
-	TextureID   int64     `json:"texture_id"`
-	TextureName string    `json:"texture_name"`
-	PricePerDM2 float64   `json:"price_per_dm2"`
-	TotalPrice  float64   `json:"total_price"`
-	Contact     string    `json:"contact"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
+    ID          int64     `json:"id"`
+    UserID      int64     `json:"user_id"`
+    WidthCM     int       `json:"width_cm"`
+    HeightCM    int       `json:"height_cm"`
+    TextureID   int64     `json:"texture_id"`
+    TextureName string    `json:"texture_name"`
+    PricePerDM2 float64   `json:"price_per_dm2"`
+    TotalPrice  float64   `json:"total_price"`
+    Contact     string    `json:"contact"`
+    Status      string    `json:"status"`
+    CreatedAt   time.Time `json:"created_at"`
 }
 
 type Config struct {
@@ -137,123 +137,100 @@ func (s *PostgresStorage) GetAvailableTextures(ctx context.Context) ([]Texture, 
 }
 
 func (s *PostgresStorage) SaveOrder(ctx context.Context, order Order) (int64, error) {
-	const query = `
-		INSERT INTO orders (
-			user_id, width_cm, height_cm, 
-			texture_id, price, 
-			contact, status, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id
-	`
+    const query = `
+        INSERT INTO orders (
+            user_id, width_cm, height_cm, 
+            texture_id, price, 
+            contact, status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id
+    `
 
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelDefault,
-		ReadOnly:  false,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("begin transaction: %w", err)
-	}
+    var orderID int64
+    err := s.db.QueryRowContext(ctx, query,
+        order.UserID,
+        order.WidthCM,
+        order.HeightCM,
+        order.TextureID,
+        order.TotalPrice,
+        order.Contact,
+        order.Status,
+        order.CreatedAt,
+    ).Scan(&orderID)
 
-	var orderID int64
-	err = tx.QueryRowContext(ctx, query,
-		order.UserID,
-		order.WidthCM,
-		order.HeightCM,
-		order.TextureID,
-		order.TotalPrice,
-		order.Contact,
-		order.Status,
-		order.CreatedAt,
-	).Scan(&orderID)
+    if err != nil {
+        return 0, fmt.Errorf("insert order: %w", err)
+    }
 
-	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return 0, fmt.Errorf("rollback error: %w, original error: %v", rbErr, err)
-		}
-		return 0, fmt.Errorf("insert order: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit transaction: %w", err)
-	}
-
-	return orderID, nil
+    return orderID, nil
 }
 
 func (s *PostgresStorage) GetOrders(ctx context.Context, limit, offset int) ([]Order, error) {
-	const query = `
-		SELECT 
-			o.id, o.user_id, o.width_cm, o.height_cm, 
-			o.texture_id, t.name as texture_name, t.price_per_dm2,
-			o.price as total_price, 
-			o.contact, o.status, o.created_at
-		FROM orders o
-		JOIN textures t ON o.texture_id = t.id
-		ORDER BY o.created_at DESC
-		LIMIT $1 OFFSET $2
-	`
+    const query = `
+        SELECT 
+            o.id, o.user_id, o.width_cm, o.height_cm, 
+            o.texture_id, t.name as texture_name, t.price_per_dm2,
+            o.price as total_price, 
+            o.contact, o.status, o.created_at
+        FROM orders o
+        JOIN textures t ON o.texture_id = t.id
+        ORDER BY o.created_at DESC
+        LIMIT $1 OFFSET $2
+    `
 
-	rows, err := s.db.QueryContext(ctx, query, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("query orders: %w", err)
-	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			s.logger.Error("Failed to close rows", zap.Error(err))
-		}
-	}()
+    rows, err := s.db.QueryContext(ctx, query, limit, offset)
+    if err != nil {
+        return nil, fmt.Errorf("query orders: %w", err)
+    }
+    defer rows.Close()
 
-	var orders []Order
-	for rows.Next() {
-		var o Order
-		if err := rows.Scan(
-			&o.ID,
-			&o.UserID,
-			&o.WidthCM,
-			&o.HeightCM,
-			&o.TextureID,
-			&o.TextureName,
-			&o.PricePerDM2,
-			&o.TotalPrice,
-			&o.Contact,
-			&o.Status,
-			&o.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan order: %w", err)
-		}
-		orders = append(orders, o)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error: %w", err)
-	}
-
-	return orders, nil
+    var orders []Order
+    for rows.Next() {
+        var o Order
+        if err := rows.Scan(
+            &o.ID,
+            &o.UserID,
+            &o.WidthCM,
+            &o.HeightCM,
+            &o.TextureID,
+            &o.TextureName,
+            &o.PricePerDM2,
+            &o.TotalPrice,
+            &o.Contact,
+            &o.Status,
+            &o.CreatedAt,
+        ); err != nil {
+            return nil, fmt.Errorf("scan order: %w", err)
+        }
+        orders = append(orders, o)
+    }
+    return orders, rows.Err()
 }
 
 func (s *PostgresStorage) GetTextureByID(ctx context.Context, textureID int64) (*Texture, error) {
-	const query = `
-		SELECT id, name, price_per_dm2, image_url, in_stock 
-		FROM textures 
-		WHERE id = $1
-	`
+    const query = `
+        SELECT id, name, price_per_dm2, image_url, in_stock 
+        FROM textures 
+        WHERE id = $1
+    `
 
-	var texture Texture
-	err := s.db.QueryRowContext(ctx, query, textureID).Scan(
-		&texture.ID,
-		&texture.Name,
-		&texture.PricePerDM2,
-		&texture.ImageURL,
-		&texture.InStock,
-	)
+    var texture Texture
+    err := s.db.QueryRowContext(ctx, query, textureID).Scan(
+        &texture.ID,
+        &texture.Name,
+        &texture.PricePerDM2,
+        &texture.ImageURL,
+        &texture.InStock,
+    )
 
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("texture not found: %w", err)
-		}
-		return nil, fmt.Errorf("query texture: %w", err)
-	}
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, fmt.Errorf("texture not found: %w", err)
+        }
+        return nil, fmt.Errorf("query texture: %w", err)
+    }
 
-	return &texture, nil
+    return &texture, nil
 }
 
 func (s *PostgresStorage) Close() error {

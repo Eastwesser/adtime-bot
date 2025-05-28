@@ -177,7 +177,7 @@ func (b *Bot) showTextures(ctx context.Context, chatID int64) {
         price := calculatePrice(width, height, texture.PricePerDM2)
         btn := tgbotapi.NewInlineKeyboardButtonData(
             fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
-            fmt.Sprintf("texture:%s", texture.ID),
+            fmt.Sprintf("texture:%d", texture.ID), // Use %d for int64
         )
         buttons = append(buttons, btn)
     }
@@ -206,57 +206,67 @@ func (b *Bot) showTextures(ctx context.Context, chatID int64) {
 }
 
 func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-	chatID := callback.Message.Chat.ID
-	textureID := strings.TrimPrefix(callback.Data, "texture:")
+    chatID := callback.Message.Chat.ID
+    textureIDStr := strings.TrimPrefix(callback.Data, "texture:")
 
-	width, height, err := b.state.GetDimensions(ctx, chatID)
-	if err != nil {
-		b.logger.Error("Failed to get dimensions",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-		b.sendError(chatID, "Ошибка при получении размеров")
-		return
-	}
+    width, height, err := b.state.GetDimensions(ctx, chatID)
+    if err != nil {
+        b.logger.Error("Failed to get dimensions",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при получении размеров")
+        return
+    }
 
-	texturePrice, err := b.api.GetTexturePrice(ctx, textureID)
-	if err != nil {
-		b.logger.Error("Failed to get texture price",
-			zap.String("texture_id", textureID),
-			zap.Error(err))
-		b.sendError(chatID, "Не удалось получить цену текстуры")
-		return
-	}
+    // Parse the texture ID from string to int64
+    textureID, err := strconv.ParseInt(textureIDStr, 10, 64)
+    if err != nil {
+        b.logger.Error("Failed to parse texture ID",
+            zap.String("texture_id", textureIDStr),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при обработке текстуры")
+        return
+    }
 
-	price := calculatePrice(width, height, texturePrice)
-	if err := b.state.SetTexture(ctx, chatID, textureID, price); err != nil {
-		b.logger.Error("Failed to set texture",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-		b.sendError(chatID, "Ошибка при сохранении текстуры")
-		return
-	}
+    texturePrice, err := b.api.GetTexturePrice(ctx, textureID)
+    if err != nil {
+        b.logger.Error("Failed to get texture price",
+            zap.Int64("texture_id", textureID),
+            zap.Error(err))
+        b.sendError(chatID, "Не удалось получить цену текстуры")
+        return
+    }
 
-	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
-		"Вы выбрали текстуру. Итоговая цена: %.2f руб\n\nКогда вам удобно выполнить заказ?",
-		price,
-	))
-	msg.ReplyMarkup = b.createDateSelectionKeyboard()
-	b.sendMessage(msg)
+    price := calculatePrice(width, height, texturePrice)
 
-	if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
-		b.logger.Error("Failed to set waiting state",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-	}
+    if err := b.state.SetTexture(ctx, chatID, textureID, price); err != nil {
+        b.logger.Error("Failed to set texture",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при сохранении текстуры")
+        return
+    }
 
-	delMsg := tgbotapi.NewDeleteMessage(chatID, callback.Message.MessageID)
-	if _, err := b.bot.Send(delMsg); err != nil {
-		b.logger.Warn("Failed to delete message",
-			zap.Int("message_id", callback.Message.MessageID),
-			zap.Error(err))
-	}
+    msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
+        "Вы выбрали текстуру. Итоговая цена: %.2f руб\n\nКогда вам удобно выполнить заказ?",
+        price,
+    ))
+    msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
+    b.sendMessage(msg)
+
+    if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
+        b.logger.Error("Failed to set waiting state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
+
+    delMsg := tgbotapi.NewDeleteMessage(chatID, callback.Message.MessageID)
+    if _, err := b.bot.Send(delMsg); err != nil {
+        b.logger.Warn("Failed to delete message",
+            zap.Int("message_id", callback.Message.MessageID),
+            zap.Error(err))
+    }
 }
-
 
 func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string) {
 	switch text {
@@ -389,14 +399,23 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    texture, err := b.storage.GetTextureByID(ctx, state.TextureID)
+	textureID, err := strconv.ParseInt(state.TextureID, 10, 64)
     if err != nil {
-        b.logger.Error("Failed to get texture",
+        b.logger.Error("Failed to parse texture ID",
             zap.String("texture_id", state.TextureID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении текстуры")
+        b.sendError(chatID, "Ошибка при обработке текстуры")
         return
     }
+
+	texture, err := b.storage.GetTextureByID(ctx, textureID)
+	if err != nil {
+		b.logger.Error("Failed to get texture",
+			zap.Int64("texture_id", textureID),
+			zap.Error(err))
+		b.sendError(chatID, "Ошибка при получении текстуры")
+		return
+	}
 
     price := calculatePrice(width, height, texture.PricePerDM2)
 
