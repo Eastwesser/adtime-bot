@@ -57,18 +57,6 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-// func Load(envPrefix string) (*Config, error) {
-//     var cfg Config
-//     opts := []env.Options{}
-//     if envPrefix != "" {
-//         opts = append(opts, env.Prefix(envPrefix))
-//     }
-//     if err := env.ParseWithOptions(&cfg, opts...); err != nil {
-//         return nil, err
-//     }
-//     return &cfg, nil
-// }
-
 func (c *Config) Validate() error {
     if c.Database.Host == "" {
         return errors.New("database host is required")
