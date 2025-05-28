@@ -14,7 +14,7 @@ func RunMigrations(ctx context.Context, db *sql.DB, dialect string) error {
     }
 
     // Run migrations from the current directory
-    if err := goose.UpContext(ctx, db, "."); err != nil {
+    if err := goose.UpContext(ctx, db, "internal/storage/migrations"); err != nil {
         return fmt.Errorf("failed to run migrations: %w", err)
     }
     return nil
@@ -25,7 +25,7 @@ func RollbackMigration(ctx context.Context, db *sql.DB, dialect string) error {
 		return fmt.Errorf("failed to set dialect: %w", err)
 	}
 
-	if err := goose.DownContext(ctx, db, "."); err != nil {
+	if err := goose.DownContext(ctx, db, "internal/storage/migrations"); err != nil {
 		return fmt.Errorf("failed to rollback migration: %w", err)
 	}
 	return nil

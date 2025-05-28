@@ -19,6 +19,17 @@ import (
 
 func main() {
 	// Initialize logger
+
+	fmt.Println("Loading configuration...")
+    
+    cfg, err := config.Load()
+    if err != nil {
+        fmt.Printf("Config error: %v\n", err)
+        os.Exit(1)
+    }
+    
+    fmt.Printf("Config loaded: %+v\n", cfg)
+
 	zapLogger, err := logger.New()
 	if err != nil {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
@@ -26,11 +37,11 @@ func main() {
 	}
 	defer zapLogger.Sync()
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		zapLogger.Fatal("Failed to load config", zap.Error(err))
-	}
+	// // Load configuration
+	// cfg, err := config.Load()
+	// if err != nil {
+	// 	zapLogger.Fatal("Failed to load config", zap.Error(err))
+	// }
 
 	// Initialize Redis client
 	redisClient := redis.New(

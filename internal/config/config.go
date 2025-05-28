@@ -13,25 +13,26 @@ type Config struct {
 		Token string `env:"TELEGRAM_TOKEN,required"`
 	}
 
+	// Make these optional
 	API struct {
-		BaseURL         string        `env:"API_BASE_URL,required"`
-		Key             string        `env:"API_KEY,required"`
+		BaseURL         string        `env:"API_BASE_URL" envDefault:""`
+		Key             string        `env:"API_KEY" envDefault:""`
 		RequestTimeout  time.Duration `env:"HTTP_REQUEST_TIMEOUT" envDefault:"30s"`
 	}
 
 	Redis struct {
-		Addr     string        `env:"REDIS_ADDR,required"`
-		Password string        `env:"REDIS_PASSWORD"`
+		Addr     string        `env:"REDIS_ADDR" envDefault:"localhost:6379"`
+		Password string        `env:"REDIS_PASSWORD" envDefault:""`
 		DB       int           `env:"REDIS_DB" envDefault:"0"`
 		TTL      time.Duration `env:"REDIS_TTL" envDefault:"24h"`
 	}
 
 	Database struct {
-		Host            string        `env:"DB_HOST,required"`
-		Port            int           `env:"DB_PORT,required"`
-		User            string        `env:"DB_USER,required"`
-		Password        string        `env:"DB_PASSWORD,required"`
-		Name            string        `env:"DB_NAME,required"`
+		Host            string        `env:"DB_HOST" envDefault:"localhost"`
+		Port            int           `env:"DB_PORT" envDefault:"5432"`
+		User            string        `env:"DB_USER" envDefault:"postgres"`
+		Password        string        `env:"DB_PASSWORD" envDefault:"postgres"`
+		Name            string        `env:"DB_NAME" envDefault:"adtime"`
 		MaxOpenConns    int           `env:"DB_MAX_OPEN_CONNS" envDefault:"25"`
 		MaxIdleConns    int           `env:"DB_MAX_IDLE_CONNS" envDefault:"5"`
 		ConnMaxLifetime time.Duration `env:"DB_CONN_MAX_LIFETIME" envDefault:"5m"`
@@ -39,7 +40,7 @@ type Config struct {
 	}
 
 	Admin struct {
-		IDs []int64 `env:"ADMIN_IDS" envSeparator:","`
+		IDs []int64 `env:"ADMIN_IDS" envSeparator:"," envDefault:"0"`
 	}
 }
 

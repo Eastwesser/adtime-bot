@@ -39,11 +39,10 @@ test:
 
 ## Apply all migrations
 migrate-up:
-	@goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime sslmode=disable" up
+	goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime host=localhost sslmode=disable" up
 
-## Revert the last migration
 migrate-down:
-	@goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime sslmode=disable" down
+	goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime host=localhost sslmode=disable" down
 
 ## Show migration status
 migrate-status:

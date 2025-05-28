@@ -116,5 +116,35 @@ Start the services:
 ```bash
 make docker-up
 ```
+OR:
+
+docker-compose up -d
+
+TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_s DB_USER=postgres DB_PASSWORD=postgres DB_NAME=adtime DB_HOST=localhost REDIS_ADDR=localhost:6379 make run
+
+TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_s DB_USER=postgres DB_PASSWORD=postgres DB_NAME=adtime make run
+
+TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_s make run
+
+
+
+
+
+# Start services
+docker-compose up -d redis postgres
+
+# Run migrations (choose one)
+make migrate-up
+# OR
+goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime host=localhost sslmode=disable" up
+
+# Run the bot
+TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_s DB_USER=postgres DB_PASSWORD=postgres DB_NAME=adtime DB_HOST=localhost REDIS_ADDR=localhost:6379 make run
+
+
+goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime host=localhost sslmode=disable" status
+
+docker-compose exec postgres psql -U postgres -d adtime -c "\dt"
+
 
 TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_s DB_USER=postgres DB_PASSWORD=postgres DB_NAME=adtime DB_HOST=localhost REDIS_ADDR=localhost:6379 make run
