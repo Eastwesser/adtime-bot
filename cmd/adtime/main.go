@@ -34,25 +34,14 @@ func main() {
 
 	// Initialize Redis client
 	redisClient := redis.New(
-		cfg.RedisAddr, 
-		cfg.RedisPassword, 
-		cfg.RedisDB, 
-		cfg.RedisTTL,
+		cfg.Redis.Addr, 
+		cfg.Redis.Password, 
+		cfg.Redis.DB, 
+		cfg.Redis.TTL,
 	)
-	defer redisClient.Close()
 
 	// Initialize PostgreSQL storage
-	pgStorage, err := storage.NewPostgresStorage(context.Background(), storage.Config{
-		Host:            cfg.DBHost,
-		Port:            cfg.DBPort,
-		User:            cfg.DBUser,
-		Password:        cfg.DBPassword,
-		DBName:          cfg.DBName,
-		MaxOpenConns:    cfg.DBMaxOpenConns,
-		MaxIdleConns:    cfg.DBMaxIdleConns,
-		ConnMaxLifetime: cfg.DBConnMaxLifetime,
-		ConnMaxIdleTime: cfg.DBConnMaxIdleTime,
-	}, zapLogger)
+	pgStorage, err := storage.NewPostgresStorage(context.Background(), *cfg, zapLogger)
 	if err != nil {
 		zapLogger.Fatal("Failed to init PostgreSQL storage", zap.Error(err))
 	}
@@ -60,15 +49,15 @@ func main() {
 
 	// Initialize API client
 	apiClient := api.NewClient(
-		cfg.APIBaseURL, 
-		cfg.APIKey, 
+		cfg.API.BaseURL, 
+		cfg.API.Key, 
 		zapLogger, 
-		cfg.HTTPRequestTimeout,
+		cfg.API.RequestTimeout,
 	)
 
 	// Create bot instance
 	tgBot, err := bot.New(
-		cfg.TelegramToken,
+		cfg.Telegram.Token,
 		apiClient,
 		redisClient,
 		pgStorage,

@@ -1,17 +1,19 @@
 package storage
 
 import (
+	"adtime-bot/internal/config"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
+	"os"
+	"path/filepath"
+
 	"github.com/cenkalti/backoff/v4"
 	"github.com/xuri/excelize/v2"
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
 )
 
 // Texture represents a product texture
@@ -38,27 +40,20 @@ type Order struct {
     CreatedAt   time.Time `json:"created_at"`
 }
 
-
-type ConfigPostgres struct {
-	Host            string
-	Port            int
-	User            string
-	Password        string
-	DBName          string
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
-	ConnMaxIdleTime time.Duration
-}
-
 type PostgresStorage struct {
 	db     *sql.DB
 	logger *zap.Logger
 }
 
-func NewPostgresStorage(ctx context.Context, cfg ConfigPostgres, logger *zap.Logger) (*PostgresStorage, error) {
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName)
+func NewPostgresStorage(ctx context.Context, cfg config.Config, logger *zap.Logger) (*PostgresStorage, error) {
+    
+    connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Database.Host, 
+		cfg.Database.Port, 
+		cfg.Database.User, 
+		cfg.Database.Password, 
+		cfg.Database.Name,
+    )
 
 	var db *sql.DB
 	var err error
@@ -94,10 +89,10 @@ func NewPostgresStorage(ctx context.Context, cfg ConfigPostgres, logger *zap.Log
 	}
 
 	// Configure connection pool
-	db.SetMaxOpenConns(cfg.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-	db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(cfg.Database.ConnMaxIdleTime)
 
 	logger.Info("Running database migrations...")
 	if err := RunMigrations(ctx, db, "postgres"); err != nil {

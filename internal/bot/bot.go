@@ -156,12 +156,12 @@ func (b *Bot) sendError(chatID int64, text string) {
 }
 
 func (b *Bot) sendAdminNotification(ctx context.Context, message string) {
-	for _, adminID := range b.cfg.AdminIDs {
-		msg := tgbotapi.NewMessage(adminID, message)
-		if _, err := b.bot.Send(msg); err != nil {
-			b.logger.Error("Failed to send admin notification",
-				zap.Int64("admin_id", adminID),
-				zap.Error(err))
-		}
-	}
+    for _, adminID := range b.cfg.Admin.IDs {
+        msg := tgbotapi.NewMessage(adminID, message)
+        if _, err := b.bot.Send(msg); err != nil {
+            b.logger.Error("Failed to send admin notification",
+                zap.Int64("admin_id", adminID),
+                zap.Error(err))
+        }
+    }
 }
