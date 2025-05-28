@@ -124,7 +124,7 @@ func (b *Bot) processMessage(ctx context.Context, msg *tgbotapi.Message) {
 
 
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-    chatID := callback.Message.Chat.ID // This is already int64
+    chatID := callback.Message.Chat.ID // This is int64
     data := callback.Data
 
     b.logger.Debug("Processing callback",

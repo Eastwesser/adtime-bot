@@ -105,7 +105,7 @@ func NewPostgresStorage(ctx context.Context, cfg config.Config, logger *zap.Logg
 }
 
 func (s *PostgresStorage) GetAvailableTextures(ctx context.Context) ([]Texture, error) {
-    const query = `SELECT id::text, name, price_per_dm2, image_url, in_stock FROM textures WHERE in_stock = TRUE`
+    const query = `SELECT id, name, price_per_dm2, image_url, in_stock FROM textures WHERE in_stock = TRUE`
 
     rows, err := s.db.QueryContext(ctx, query)
     if err != nil {
@@ -171,7 +171,7 @@ func (s *PostgresStorage) GetOrders(ctx context.Context, limit, offset int) ([]O
     const query = `
         SELECT 
             o.id, o.user_id, o.width_cm, o.height_cm, 
-            o.texture_id::text, t.name as texture_name, t.price_per_dm2,
+            o.texture_id, t.name as texture_name, t.price_per_dm2,
             o.price as total_price, 
             o.contact, o.status, o.created_at
         FROM orders o
