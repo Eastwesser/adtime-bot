@@ -366,23 +366,62 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         b.sendError(chatID, "Ошибка при получении текстуры")
         return
     }
+	fmt.Println(texture)
 
-    // Calculate price and create order
-    price := CalculatePrice(width, height, texture.PricePerDM2)
+	// texture, err := b.storage.GetTextureByID(ctx, textureID)
+    // if err != nil {
+    //     b.logger.Error("Failed to get texture",
+    //         zap.String("texture_id", textureID),
+    //         zap.Error(err))
+    //     b.sendError(chatID, "Ошибка при получении текстуры")
+    //     return
+    // }
+
+	// Create a simple order without API calls
     order := storage.Order{
         UserID:      chatID,
         WidthCM:     width,
         HeightCM:    height,
-        TextureID:   texture.ID,
-        TextureName: texture.Name,
-        PricePerDM2: texture.PricePerDM2,
-        TotalPrice:  price,
+        TextureID:   "PLACEHOLDER temp-texture", // Temporary value
+        TextureName: "PLACEHOLDER Temporary Texture",
+        PricePerDM2: 10.0, // Temporary price
+        TotalPrice:  float64(width*height) / 100 * 10.0, // Simple calculation
         Contact:     text,
         Status:      "new",
         CreatedAt:   time.Now(),
     }
 
-    // Save order to database
+    // // Calculate price and create order (WITH API)
+    // price := CalculatePrice(width, height, texture.PricePerDM2)
+    // order := storage.Order{
+    //     UserID:      chatID,
+    //     WidthCM:     width,
+    //     HeightCM:    height,
+    //     TextureID:   texture.ID,
+    //     TextureName: texture.Name,
+    //     PricePerDM2: texture.PricePerDM2,
+    //     TotalPrice:  price,
+    //     Contact:     text,
+    //     Status:      "new",
+    //     CreatedAt:   time.Now(),
+    // }
+
+    // // Save order to database
+    // orderID, err := b.storage.SaveOrder(ctx, order)
+    // if err != nil {
+    //     b.logger.Error("Failed to save order",
+    //         zap.Int64("chat_id", chatID),
+    //         zap.Error(err))
+    //     b.sendError(chatID, "Ошибка при сохранении заказа")
+    //     return
+    // }
+    // order.ID = orderID
+
+	//     // Send confirmation to user // WITH API
+    // b.sendMessage(tgbotapi.NewMessage(chatID,
+    //     "✅ Ваш заказ успешно оформлен!\n\nМы свяжемся с вами в ближайшее время."))
+
+	// Save order to database
     orderID, err := b.storage.SaveOrder(ctx, order)
     if err != nil {
         b.logger.Error("Failed to save order",
@@ -391,11 +430,9 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         b.sendError(chatID, "Ошибка при сохранении заказа")
         return
     }
-    order.ID = orderID
 
-    // Send confirmation to user
     b.sendMessage(tgbotapi.NewMessage(chatID,
-        "✅ Ваш заказ успешно оформлен!\n\nМы свяжемся с вами в ближайшее время."))
+        "✅ Ваш заказ успешно оформлен!\nНомер заказа: #" + strconv.FormatInt(orderID, 10)))
 
     // // Notify admin
     // adminMsg := FormatOrderNotification(order)

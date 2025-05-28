@@ -116,3 +116,5 @@ Start the services:
 ```bash
 make docker-up
 ```
+
+TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_s DB_USER=postgres DB_PASSWORD=postgres DB_NAME=adtime DB_HOST=localhost REDIS_ADDR=localhost:6379 make run
