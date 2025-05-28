@@ -147,64 +147,6 @@ func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text strin
 	b.showTextures(ctx, chatID)
 }
 
-func (b *Bot) showTextures(ctx context.Context, chatID int64) {
-    width, height, err := b.state.GetDimensions(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get dimensions",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении размеров")
-        return
-    }
-
-    // Validate max dimensions
-    if width > 80 || height > 50 {
-        b.sendError(chatID, "Максимальный размер: 80x50 см")
-        return
-    }
-
-    textures, err := b.storage.GetAvailableTextures(ctx)
-    if err != nil {
-        b.logger.Error("Failed to get textures",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Не удалось загрузить варианты текстуры")
-        return
-    }
-
-    var buttons []tgbotapi.InlineKeyboardButton
-    for _, texture := range textures {
-        price := calculatePrice(width, height, texture.PricePerDM2)
-        btn := tgbotapi.NewInlineKeyboardButtonData(
-            fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
-            fmt.Sprintf("texture:%s", texture.ID),
-        )
-        buttons = append(buttons, btn)
-    }
-
-    if len(buttons) == 0 {
-        b.sendError(chatID, "Нет доступных текстур")
-        return
-    }
-
-    // Send texture image if available
-    if textures[0].ImageURL != "" {
-        photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
-        photo.Caption = "Образцы доступных текстур:"
-        if _, err := b.bot.Send(photo); err != nil {
-            b.logger.Error("Failed to send photo",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-        }
-    }
-
-    msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
-    msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-        tgbotapi.NewInlineKeyboardRow(buttons...),
-    )
-    b.sendMessage(msg)
-}
-
 func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
     chatID := callback.Message.Chat.ID
     
@@ -237,7 +179,7 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
     }
 
     // Calculate total price
-    price := calculatePrice(width, height, texturePrice)
+    price := CalculatePrice(width, height, texturePrice)
 
     // Save texture selection to state
     if err := b.state.SetTexture(ctx, chatID, textureID, price); err != nil {
@@ -381,7 +323,7 @@ func (b *Bot) handleDateConfirmation(ctx context.Context, chatID int64, text str
 
 func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
     // Validate phone number format
-    if !isValidPhoneNumber(text) {
+    if !IsValidPhoneNumber(text) {
         b.sendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567)")
         return
     }
@@ -426,7 +368,7 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     }
 
     // Calculate price and create order
-    price := calculatePrice(width, height, texture.PricePerDM2)
+    price := CalculatePrice(width, height, texture.PricePerDM2)
     order := storage.Order{
         UserID:      chatID,
         WidthCM:     width,
@@ -456,7 +398,7 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         "✅ Ваш заказ успешно оформлен!\n\nМы свяжемся с вами в ближайшее время."))
 
     // Notify admin
-    adminMsg := formatOrderNotification(order)
+    adminMsg := FormatOrderNotification(order)
     b.sendAdminNotification(ctx, adminMsg)
 
     // Export to Excel (with error handling)
@@ -476,48 +418,60 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     }
 }
 
-func isValidPhoneNumber(phone string) bool {
-	if len(phone) < 10 {
-		return false
-	}
+func (b *Bot) showTextures(ctx context.Context, chatID int64) {
+    width, height, err := b.state.GetDimensions(ctx, chatID)
+    if err != nil {
+        b.logger.Error("Failed to get dimensions",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при получении размеров")
+        return
+    }
 
-	if !strings.HasPrefix(phone, "+") {
-		return false
-	}
+    // Validate max dimensions
+    if width > 80 || height > 50 {
+        b.sendError(chatID, "Максимальный размер: 80x50 см")
+        return
+    }
 
-	for _, c := range phone[1:] {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
+    textures, err := b.storage.GetAvailableTextures(ctx)
+    if err != nil {
+        b.logger.Error("Failed to get textures",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Не удалось загрузить варианты текстуры")
+        return
+    }
 
-	return true
-}
+    var buttons []tgbotapi.InlineKeyboardButton
+    for _, texture := range textures {
+        price := CalculatePrice(width, height, texture.PricePerDM2)
+        btn := tgbotapi.NewInlineKeyboardButtonData(
+            fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
+            fmt.Sprintf("texture:%s", texture.ID),
+        )
+        buttons = append(buttons, btn)
+    }
 
-func formatOrderNotification(order storage.Order) string {
-    return fmt.Sprintf(
-        "📦 Новый заказ #%d\n\n"+
-            "Размеры: %d x %d см\n"+
-            "Текстура: %s (%.2f₽/дм²)\n"+
-            "Цена: %.2f руб\n"+
-            "Контакт: %s\n"+
-            "Статус: %s\n"+
-            "Дата: %s",
-        order.ID,
-        order.WidthCM,
-        order.HeightCM,
-        order.TextureName,
-        order.PricePerDM2,
-        order.TotalPrice,
-        order.Contact,
-        order.Status,
-        order.CreatedAt.Format("02.01.2006 15:04"),
+    if len(buttons) == 0 {
+        b.sendError(chatID, "Нет доступных текстур")
+        return
+    }
+
+    // Send texture image if available
+    if textures[0].ImageURL != "" {
+        photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
+        photo.Caption = "Образцы доступных текстур:"
+        if _, err := b.bot.Send(photo); err != nil {
+            b.logger.Error("Failed to send photo",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+        }
+    }
+
+    msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
+    msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+        tgbotapi.NewInlineKeyboardRow(buttons...),
     )
-}
-
-func calculatePrice(widthCm, heightCm int, pricePerDM2 float64) float64 {
-    widthDM := float64(widthCm) / 10
-    heightDM := float64(heightCm) / 10
-    area := widthDM * heightDM
-    return area * pricePerDM2
+    b.sendMessage(msg)
 }
