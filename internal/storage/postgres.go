@@ -25,18 +25,19 @@ type Texture struct {
 
 // Order represents a customer order
 type Order struct {
-    ID          int64
-    UserID      int64
-    WidthCM     int
-    HeightCM    int
-    TextureID   string
-    TextureName string
-    PricePerDM2 float64
-    TotalPrice  float64
-    Contact     string
-    Status      string
-    CreatedAt   time.Time
+    ID          int64     `json:"id"`
+    UserID      int64     `json:"user_id"`
+    WidthCM     int       `json:"width_cm"`
+    HeightCM    int       `json:"height_cm"`
+    TextureID   string    `json:"texture_id"`
+    TextureName string    `json:"texture_name"`
+    PricePerDM2 float64   `json:"price_per_dm2"`
+    TotalPrice  float64   `json:"total_price"`
+    Contact     string    `json:"contact"`
+    Status      string    `json:"status"`
+    CreatedAt   time.Time `json:"created_at"`
 }
+
 
 type Config struct {
 	Host            string
