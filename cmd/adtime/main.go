@@ -4,7 +4,7 @@ import (
 	"adtime-bot/internal/bot"
 	"adtime-bot/internal/config"
 	"adtime-bot/internal/storage"
-	"adtime-bot/pkg/api"
+	// "adtime-bot/pkg/api"
 	"adtime-bot/pkg/logger"
 	"adtime-bot/pkg/redis"
 	"context"
@@ -47,18 +47,18 @@ func main() {
 	}
 	defer pgStorage.Close()
 
-	// Initialize API client
-	apiClient := api.NewClient(
-		cfg.API.BaseURL, 
-		cfg.API.Key, 
-		zapLogger, 
-		cfg.API.RequestTimeout,
-	)
+	// // Initialize API client
+	// apiClient := api.NewClient(
+	// 	cfg.API.BaseURL, 
+	// 	cfg.API.Key, 
+	// 	zapLogger, 
+	// 	cfg.API.RequestTimeout,
+	// )
 
 	// Create bot instance
 	tgBot, err := bot.New(
 		cfg.Telegram.Token,
-		apiClient,
+		nil, // apiClient,
 		redisClient,
 		pgStorage,
 		zapLogger,

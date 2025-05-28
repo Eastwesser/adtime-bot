@@ -49,10 +49,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	// Validate required fields
-	if len(cfg.Admin.IDs) == 0 {
-		return nil, fmt.Errorf("at least one admin ID is required")
-	}
+	// // Validate required fields
+	// if len(cfg.Admin.IDs) == 0 {
+	// 	return nil, fmt.Errorf("at least one admin ID is required")
+	// }
 
 	return &cfg, nil
 }

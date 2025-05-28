@@ -397,17 +397,17 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     b.sendMessage(tgbotapi.NewMessage(chatID,
         "✅ Ваш заказ успешно оформлен!\n\nМы свяжемся с вами в ближайшее время."))
 
-    // Notify admin
-    adminMsg := FormatOrderNotification(order)
-    b.sendAdminNotification(ctx, adminMsg)
+    // // Notify admin
+    // adminMsg := FormatOrderNotification(order)
+    // b.sendAdminNotification(ctx, adminMsg)
 
     // Export to Excel (with error handling)
     if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
         b.logger.Error("Failed to export order to Excel",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendAdminNotification(ctx, 
-            fmt.Sprintf("⚠️ Failed to export order #%d to Excel: %v", order.ID, err))
+        // b.sendAdminNotification(ctx, 
+        //     fmt.Sprintf("⚠️ Failed to export order #%d to Excel: %v", order.ID, err))
     }
 
     // Clear user state

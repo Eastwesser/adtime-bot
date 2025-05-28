@@ -26,26 +26,27 @@ type Bot struct {
 }
 
 func New(
-	token string,
-	apiClient *api.Client,
-	redisClient *redis.Client,
-	pgStorage *storage.PostgresStorage,
-	logger *zap.Logger,
-	cfg *config.Config,
+    token string,
+    apiClient *api.Client,
+    redisClient *redis.Client,
+    pgStorage *storage.PostgresStorage,
+    logger *zap.Logger,
+    cfg *config.Config,
 ) (*Bot, error) {
-	botAPI, err := tgbotapi.NewBotAPI(token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create bot API: %w", err)
-	}
+    botAPI, err := tgbotapi.NewBotAPI(token)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create bot API: %w", err)
+    }
 
-	botAPI.Debug = false
+	botAPI.Debug = true // Enable debug for now
+	// botAPI.Debug = false // for prod
 
 	logger.Info("Bot authorized", 
-		zap.String("username", botAPI.Self.UserName),
-		zap.Int64("id", botAPI.Self.ID))
+        zap.String("username", botAPI.Self.UserName),
+        zap.Int64("id", botAPI.Self.ID))
 
 	b := &Bot{
-		api:     apiClient,
+		// api:     apiClient,
 		bot:     botAPI,
 		logger:  logger,
 		state:   NewStateStorage(redisClient),
@@ -122,7 +123,6 @@ func (b *Bot) processMessage(ctx context.Context, msg *tgbotapi.Message) {
 	}
 }
 
-
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
     chatID := callback.Message.Chat.ID // This is int64
     data := callback.Data
@@ -155,13 +155,13 @@ func (b *Bot) sendError(chatID int64, text string) {
 	b.sendMessage(msg)
 }
 
-func (b *Bot) sendAdminNotification(ctx context.Context, message string) {
-    for _, adminID := range b.cfg.Admin.IDs {
-        msg := tgbotapi.NewMessage(adminID, message)
-        if _, err := b.bot.Send(msg); err != nil {
-            b.logger.Error("Failed to send admin notification",
-                zap.Int64("admin_id", adminID),
-                zap.Error(err))
-        }
-    }
-}
+// func (b *Bot) sendAdminNotification(ctx context.Context, message string) {
+//     for _, adminID := range b.cfg.Admin.IDs {
+//         msg := tgbotapi.NewMessage(adminID, message)
+//         if _, err := b.bot.Send(msg); err != nil {
+//             b.logger.Error("Failed to send admin notification",
+//                 zap.Int64("admin_id", adminID),
+//                 zap.Error(err))
+//         }
+//     }
+// }
