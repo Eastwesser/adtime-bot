@@ -434,44 +434,44 @@ func (b *Bot) showTextures(ctx context.Context, chatID int64) {
         return
     }
 
-    textures, err := b.storage.GetAvailableTextures(ctx)
-    if err != nil {
-        b.logger.Error("Failed to get textures",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Не удалось загрузить варианты текстуры")
-        return
-    }
+    // textures, err := b.storage.GetAvailableTextures(ctx)
+    // if err != nil {
+    //     b.logger.Error("Failed to get textures",
+    //         zap.Int64("chat_id", chatID),
+    //         zap.Error(err))
+    //     b.sendError(chatID, "Не удалось загрузить варианты текстуры")
+    //     return
+    // }
 
-    var buttons []tgbotapi.InlineKeyboardButton
-    for _, texture := range textures {
-        price := CalculatePrice(width, height, texture.PricePerDM2)
-        btn := tgbotapi.NewInlineKeyboardButtonData(
-            fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
-            fmt.Sprintf("texture:%s", texture.ID),
-        )
-        buttons = append(buttons, btn)
-    }
+    // var buttons []tgbotapi.InlineKeyboardButton
+    // for _, texture := range textures {
+    //     price := CalculatePrice(width, height, texture.PricePerDM2)
+    //     btn := tgbotapi.NewInlineKeyboardButtonData(
+    //         fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
+    //         fmt.Sprintf("texture:%s", texture.ID),
+    //     )
+    //     buttons = append(buttons, btn)
+    // }
 
-    if len(buttons) == 0 {
-        b.sendError(chatID, "Нет доступных текстур")
-        return
-    }
+    // if len(buttons) == 0 {
+    //     b.sendError(chatID, "Нет доступных текстур")
+    //     return
+    // }
 
-    // Send texture image if available
-    if textures[0].ImageURL != "" {
-        photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
-        photo.Caption = "Образцы доступных текстур:"
-        if _, err := b.bot.Send(photo); err != nil {
-            b.logger.Error("Failed to send photo",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-        }
-    }
+    // // Send texture image if available
+    // if textures[0].ImageURL != "" {
+    //     photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
+    //     photo.Caption = "Образцы доступных текстур:"
+    //     if _, err := b.bot.Send(photo); err != nil {
+    //         b.logger.Error("Failed to send photo",
+    //             zap.Int64("chat_id", chatID),
+    //             zap.Error(err))
+    //     }
+    // }
 
-    msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
-    msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-        tgbotapi.NewInlineKeyboardRow(buttons...),
-    )
-    b.sendMessage(msg)
+    // msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
+    // msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+    //     tgbotapi.NewInlineKeyboardRow(buttons...),
+    // )
+    // b.sendMessage(msg)
 }
