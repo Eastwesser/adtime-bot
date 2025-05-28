@@ -15,13 +15,18 @@ type UserState struct {
 	PhoneNumber string `json:"phone_number"`
 	WidthCM     int    `json:"width_cm"`
 	HeightCM    int    `json:"height_cm"`
-	TextureID   int64  `json:"texture_id"`
+	TextureID   int    `json:"texture_id"`
 	Price       string `json:"price"`
 }
 
 type StateStorage struct {
 	redis *redis.Client
 	ttl   time.Duration
+}
+
+type State interface {
+    GetTextureID(ctx context.Context, chatID int64) (string, error)
+    SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error
 }
 
 func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
@@ -128,12 +133,12 @@ func (s *StateStorage) SetPhoneNumber(ctx context.Context, chatID int64, phone s
 	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID int64, price float64) error {
+func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID int, price float64) error {
     state, err := s.Get(ctx, chatID)
     if err != nil {
         state = UserState{}
     }
-    state.TextureID = textureID // This was missing before
+    price := calculatePrice(width, height, texture.PricePerDM2)
     state.Price = fmt.Sprintf("%.2f", price)
     return s.Save(ctx, chatID, state)
 }

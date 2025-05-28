@@ -33,20 +33,20 @@ func (b *Bot) handleUnknownCommand(ctx context.Context, chatID int64) {
 
 func (b *Bot) handleHelp(ctx context.Context, chatID int64) {
 	helpText := `Доступные команды:
-/start - Начать работу с ботом
-/help - Показать эту справку
+	/start - Начать работу с ботом
+	/help - Показать эту справку
 
-Если у вас возникли проблемы, свяжитесь с поддержкой.`
+	Если у вас возникли проблемы, свяжитесь с поддержкой.`
 	b.sendMessage(tgbotapi.NewMessage(chatID, helpText))
 }
 
 func (b *Bot) handleStart(ctx context.Context, chatID int64) {
 	text := `Привет! 👋
 
-⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-Используя этого бота, вы соглашаетесь на обработку персональных данных.
+	⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
+	Используя этого бота, вы соглашаетесь на обработку персональных данных.
 
-Если всё ок — нажмите кнопку ниже 👇`
+	Если всё ок — нажмите кнопку ниже 👇`
 
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
@@ -207,7 +207,6 @@ func (b *Bot) showTextures(ctx context.Context, chatID int64) {
 
 func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
     chatID := callback.Message.Chat.ID
-    textureIDStr := strings.TrimPrefix(callback.Data, "texture:")
 
     width, height, err := b.state.GetDimensions(ctx, chatID)
     if err != nil {
@@ -218,26 +217,24 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
         return
     }
 
-    // Parse the texture ID from string to int64
-    textureID, err := strconv.ParseInt(textureIDStr, 10, 64)
-    if err != nil {
-        b.logger.Error("Failed to parse texture ID",
-            zap.String("texture_id", textureIDStr),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при обработке текстуры")
-        return
-    }
+    parts := strings.Split(callback.Data, ":")
+	if len(parts) != 2 {
+		b.sendError(chatID, "Неверный формат выбора текстуры")
+		return
+	}
+	textureID := parts[1] 
 
-    texturePrice, err := b.api.GetTexturePrice(ctx, textureID)
-    if err != nil {
-        b.logger.Error("Failed to get texture price",
-            zap.Int64("texture_id", textureID),
-            zap.Error(err))
-        b.sendError(chatID, "Не удалось получить цену текстуры")
-        return
-    }
 
-    price := calculatePrice(width, height, texturePrice)
+    texturePrice, err := b.api.GetTexturePrice(ctx, strconv.FormatInt(textureID, 10))
+	if err != nil {
+		b.logger.Error("Failed to get texture price",
+			zap.Int64("texture_id", textureID),
+			zap.Error(err))
+		b.sendError(chatID, "Не удалось получить цену текстуры")
+		return
+	}
+
+	price := calculatePrice(width, height, texture.PricePerDM2)
 
     if err := b.state.SetTexture(ctx, chatID, textureID, price); err != nil {
         b.logger.Error("Failed to set texture",
@@ -399,23 +396,20 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         return
     }
 
-	textureID, err := strconv.ParseInt(state.TextureID, 10, 64)
-    if err != nil {
-        b.logger.Error("Failed to parse texture ID",
-            zap.String("texture_id", state.TextureID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при обработке текстуры")
-        return
-    }
-
-	texture, err := b.storage.GetTextureByID(ctx, textureID)
+	textureID, err := b.state.GetTextureID(ctx, chatID)
 	if err != nil {
-		b.logger.Error("Failed to get texture",
-			zap.Int64("texture_id", textureID),
+		b.logger.Error("Failed to get texture ID from state",
+			zap.Int64("chat_id", chatID),
 			zap.Error(err))
 		b.sendError(chatID, "Ошибка при получении текстуры")
 		return
 	}
+
+	texture, err := b.storage.GetTextureByID(ctx, textureID)
+	if err != nil {
+		b.logger.Error("Failed to get texture",
+			zap.String("texture_id", textureID),
+			zap.Error(err))
 
     price := calculatePrice(width, height, texture.PricePerDM2)
 
