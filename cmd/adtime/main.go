@@ -33,7 +33,12 @@ func main() {
 	}
 
 	// Initialize Redis client
-	redisClient := redis.New(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisTTL)
+	redisClient := redis.New(
+		cfg.RedisAddr, 
+		cfg.RedisPassword, 
+		cfg.RedisDB, 
+		cfg.RedisTTL,
+	)
 	defer redisClient.Close()
 
 	// Initialize PostgreSQL storage
@@ -54,7 +59,12 @@ func main() {
 	defer pgStorage.Close()
 
 	// Initialize API client
-	apiClient := api.NewClient(cfg.APIBaseURL, cfg.APIKey, zapLogger, cfg.HTTPRequestTimeout)
+	apiClient := api.NewClient(
+		cfg.APIBaseURL, 
+		cfg.APIKey, 
+		zapLogger, 
+		cfg.HTTPRequestTimeout,
+	)
 
 	// Create bot instance
 	tgBot, err := bot.New(
