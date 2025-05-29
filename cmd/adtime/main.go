@@ -4,7 +4,7 @@ import (
 	"adtime-bot/internal/bot"
 	"adtime-bot/internal/config"
 	"adtime-bot/internal/storage"
-	"adtime-bot/pkg/redis" // Добавляем импорт
+	"adtime-bot/pkg/redis"
 	"context"
 	"fmt"
 	"os"
