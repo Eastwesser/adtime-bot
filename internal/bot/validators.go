@@ -7,13 +7,6 @@ import (
 	"unicode"
 )
 
-// func CalculatePrice(widthCm, heightCm int, pricePerDM2 float64) float64 {
-// 	widthDM := float64(widthCm) / 10
-// 	heightDM := float64(heightCm) / 10
-// 	area := widthDM * heightDM
-// 	return area * pricePerDM2
-// }
-
 func NormalizePhoneNumber(phone string) string {
     // Remove all non-digit characters
     cleaned := strings.Map(func(r rune) rune {
@@ -99,24 +92,38 @@ func IsValidPhoneNumber(phone string) bool {
 }
 
 func FormatOrderNotification(order storage.Order) string {
-	return fmt.Sprintf(
-		"📦 Новый заказ #%d\n\n"+
-			"Размеры: %d x %d см\n"+
-			"Текстура: %s (%.2f₽/дм²)\n"+
-			"Цена: %.2f руб\n"+
-			"Контакт: %s\n"+
-			"Статус: %s\n"+
-			"Дата: %s",
-		order.ID,
-		order.WidthCM,
-		order.HeightCM,
-		order.TextureName,
-		order.PricePerDM2,
-		order.TotalPrice,
-		order.Contact,
-		order.Status,
-		order.CreatedAt.Format("02.01.2006 15:04"),
-	)
+    return fmt.Sprintf(
+        "📦 Новый заказ #%d\n\n"+
+            "Размеры: %d x %d см\n"+
+            "Текстура: %s\n"+
+            "Итоговая цена: %.2f руб\n"+
+            "──────────────────\n"+
+            "Детали расчета:\n"+
+            "- Стоимость кожи: %.2f руб\n"+
+            "- Обработка: %.2f руб\n"+
+            "- Комиссия: %.2f руб\n"+
+            "- Налог: %.2f руб\n"+
+            "Чистая выручка: %.2f руб\n"+
+            "Прибыль: %.2f руб\n"+
+            "──────────────────\n"+
+            "Контакт: %s\n"+
+            "Статус: %s\n"+
+            "Дата: %s",
+        order.ID,
+        order.WidthCM,
+        order.HeightCM,
+        order.TextureName,
+        order.Price,
+        order.LeatherCost,
+        order.ProcessCost,
+        order.Commission,
+        order.Tax,
+        order.NetRevenue,
+        order.Profit,
+        order.Contact,
+        order.Status,
+        order.CreatedAt.Format("02.01.2006 15:04"),
+    )
 }
 
 func FormatPhoneNumber(phone string) string {

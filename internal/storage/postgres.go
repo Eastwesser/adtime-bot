@@ -31,17 +31,23 @@ type Texture struct {
 }
 
 type Order struct {
-	ID          int64     `db:"id"`
-	UserID      int64     `db:"user_id"`
-	WidthCM     int       `db:"width_cm"`
-	HeightCM    int       `db:"height_cm"`
-	TextureID   string    `db:"texture_id"`
-	TextureName string    `db:"texture_name"`
-	PricePerDM2 float64   `db:"price_per_dm2"`
-	TotalPrice  float64   `db:"price"`
-	Contact     string    `db:"contact"`
-	Status      string    `db:"status"`
-	CreatedAt   time.Time `db:"created_at"`
+    ID           int64     `db:"id"`
+    UserID       int64     `db:"user_id"`
+    WidthCM      int       `db:"width_cm"`
+    HeightCM     int       `db:"height_cm"`
+    TextureID    string    `db:"texture_id"`
+    TextureName  string    `db:"-"`
+    Price        float64   `db:"price"`
+    LeatherCost  float64   `db:"leather_cost"`
+    ProcessCost  float64   `db:"process_cost"`
+    TotalCost    float64   `db:"total_cost"`
+    Commission   float64   `db:"commission"`
+    Tax          float64   `db:"tax"`
+    NetRevenue   float64   `db:"net_revenue"`
+    Profit       float64   `db:"profit"`
+    Contact      string    `db:"contact"`
+    Status       string    `db:"status"`
+    CreatedAt    time.Time `db:"created_at"`
 }
 
 type PriceFormula struct {
@@ -138,96 +144,111 @@ func (s *PostgresStorage) GetAvailableTextures(ctx context.Context) ([]Texture, 
 }
 
 func (s *PostgresStorage) SaveOrder(ctx context.Context, order Order) (int64, error) {
-	const query = `
-		INSERT INTO orders (
-			user_id, width_cm, height_cm, 
-			texture_id, price, 
-			contact, status, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id
-	`
+    const query = `
+        INSERT INTO orders (
+            user_id, width_cm, height_cm, texture_id, price,
+            leather_cost, process_cost, total_cost, commission,
+            tax, net_revenue, profit, contact, status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        RETURNING id
+    `
 
-	var orderID int64
-	err := s.db.QueryRowContext(ctx, query,
-		order.UserID,
-		order.WidthCM,
-		order.HeightCM,
-		order.TextureID,
-		order.TotalPrice,
-		order.Contact,
-		order.Status,
-		order.CreatedAt,
-	).Scan(&orderID)
+    var orderID int64
+    err := s.db.QueryRowContext(ctx, query,
+        order.UserID,
+        order.WidthCM,
+        order.HeightCM,
+        order.TextureID,
+        order.Price,
+        order.LeatherCost,
+        order.ProcessCost,
+        order.TotalCost,
+        order.Commission,
+        order.Tax,
+        order.NetRevenue,
+        order.Profit,
+        order.Contact,
+        order.Status,
+        order.CreatedAt,
+    ).Scan(&orderID)
 
-	if err != nil {
-		return 0, fmt.Errorf("failed to save order: %w", err)
-	}
+    if err != nil {
+        return 0, fmt.Errorf("failed to save order: %w", err)
+    }
 
-	return orderID, nil
+    return orderID, nil
 }
 
 func (s *PostgresStorage) ExportOrderToExcel(ctx context.Context, order Order) error {
-	f := excelize.NewFile()
-	defer f.Close()
+    f := excelize.NewFile()
+    defer f.Close()
 
-	index, err := f.NewSheet("Orders")
-	if err != nil {
-		return fmt.Errorf("failed to create sheet: %w", err)
-	}
+    index, err := f.NewSheet("Orders")
+    if err != nil {
+        return fmt.Errorf("failed to create sheet: %w", err)
+    }
 
-	// Set headers
-	headers := []string{
-		"ID", "User ID", "Width (cm)", "Height (cm)",
-		"Texture ID", "Texture Name", "Price per dm²",
-		"Total Price", "Contact", "Status", "Created At",
-	}
-	for i, header := range headers {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		f.SetCellValue("Orders", cell, header)
-	}
+    // Set headers
+    headers := []string{
+        "ID", "User ID", "Width (cm)", "Height (cm)",
+        "Texture ID", "Texture Name", "Price",
+        "Leather Cost", "Process Cost", "Total Cost",
+        "Commission", "Tax", "Net Revenue", "Profit",
+        "Contact", "Status", "Created At",
+    }
+    for i, header := range headers {
+        cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+        f.SetCellValue("Orders", cell, header)
+    }
 
-	// Set data
-	data := []interface{}{
-		order.ID,
-		order.UserID,
-		order.WidthCM,
-		order.HeightCM,
-		order.TextureID,
-		order.TextureName,
-		order.PricePerDM2,
-		order.TotalPrice,
-		order.Contact,
-		order.Status,
-		order.CreatedAt.Format("2006-01-02 15:04:05"),
-	}
-	for i, value := range data {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 2)
-		f.SetCellValue("Orders", cell, value)
-	}
+    // Set data
+    data := []interface{}{
+        order.ID,
+        order.UserID,
+        order.WidthCM,
+        order.HeightCM,
+        order.TextureID,
+        order.TextureName,
+        order.Price,
+        order.LeatherCost,
+        order.ProcessCost,
+        order.TotalCost,
+        order.Commission,
+        order.Tax,
+        order.NetRevenue,
+        order.Profit,
+        order.Contact,
+        order.Status,
+        order.CreatedAt.Format("2006-01-02 15:04:05"),
+    }
+    for i, value := range data {
+        cell, _ := excelize.CoordinatesToCellName(i+1, 2)
+        f.SetCellValue("Orders", cell, value)
+    }
 
-	// Calculate and add area
-	area := float64(order.WidthCM*order.HeightCM) / 100
-	f.SetCellValue("Orders", "K1", "Area (dm²)")
-	f.SetCellValue("Orders", "K2", area)
+    // Calculate and add area
+    area := float64(order.WidthCM*order.HeightCM) / 100
+    f.SetCellValue("Orders", "R1", "Area (dm²)")
+    f.SetCellValue("Orders", "R2", area)
 
-	f.SetActiveSheet(index)
+    f.SetActiveSheet(index)
 
-	// Ensure orders directory exists
-	if err := os.MkdirAll("orders", 0755); err != nil {
-		return fmt.Errorf("failed to create orders directory: %w", err)
-	}
+    // Ensure orders directory exists
+    if err := os.MkdirAll("orders", 0755); err != nil {
+        return fmt.Errorf("failed to create orders directory: %w", err)
+    }
 
-	// Generate filename
-	filename := filepath.Join("orders",
-		fmt.Sprintf("order_%d_%s.xlsx",
-			order.ID,
-			order.CreatedAt.Format("20060102_150405")))
+    // Generate filename
+    filename := filepath.Join("orders",
+        fmt.Sprintf("order_%d_%s.xlsx",
+            order.ID,
+            order.CreatedAt.Format("20060102_150405")))
 
-	if err := f.SaveAs(filename); err != nil {
-		return fmt.Errorf("failed to save Excel file: %w", err)
-	}
+    if err := f.SaveAs(filename); err != nil {
+        return fmt.Errorf("failed to save Excel file: %w", err)
+    }
 
-	return nil
+    return nil
 }
 
 func (s *PostgresStorage) Close() error {
@@ -236,16 +257,3 @@ func (s *PostgresStorage) Close() error {
 	}
 	return s.db.Close()
 }
-
-func (s *PostgresStorage) GetPriceFormula(ctx context.Context, serviceType string) (PriceFormula, error) {
-	panic("implement")
-}
-
-func CalculateDynamicPrice(formula PriceFormula, width, height int) float64 {
-    // Парсинг formula.Formula и подстановка значений
-    // Можно использовать expr или другие легковесные движки выражений
-	result := width / height * 100
-
-	return float64(result)
-}
-

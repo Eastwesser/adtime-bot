@@ -73,19 +73,3 @@ func (c *Config) Validate() error {
 
 	return nil
 }
-
-type Pricing struct {
-        LeatherPricePerDM2    float64 `env:"LEATHER_PRICE_PER_DM2" envDefault:"25.0"`
-		ProcessingCostPerDM2  float64 `env:"PROCESSING_COST_PER_DM2" envDefault:"31.25"`
-		PaymentCommissionRate float64 `env:"PAYMENT_COMMISSION_RATE" envDefault:"0.03"`
-		SalesTaxRate          float64 `env:"SALES_TAX_RATE" envDefault:"0.06"`
-		MarkupMultiplier      float64 `env:"MARKUP_MULTIPLIER" envDefault:"2.5"`
-}
-
-func (p Pricing) Validate() error {
-    if p.LeatherPricePerDM2 <= 0 {
-        return errors.New("leather price must be positive")
-    }
-    // Add other validations...
-    return nil
-}

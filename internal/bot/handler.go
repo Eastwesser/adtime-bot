@@ -285,6 +285,7 @@ func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string
 		}
 	}
 }
+
 func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
     normalized := NormalizePhoneNumber(text)
     
@@ -359,22 +360,22 @@ func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int6
     priceDetails := CalculatePrice(width, height, pricingConfig)
 
     order := storage.Order{
-        UserID:       chatID,
-        WidthCM:      width,
-        HeightCM:     height,
-        TextureID:    texture.ID,
-        TextureName:  texture.Name,
-        LeatherCost:  priceDetails["leather_cost"],
-        ProcessCost:  priceDetails["processing_cost"],
-        TotalCost:    priceDetails["total_cost"],
-        FinalPrice:   priceDetails["final_price"],
-        Commission:   priceDetails["commission"],
-        Tax:          priceDetails["tax"],
-        NetRevenue:   priceDetails["net_revenue"],
-        Profit:       priceDetails["profit"],
-        Contact:      phone,
-        Status:       "new",
-        CreatedAt:    time.Now(),
+        UserID:      chatID,
+        WidthCM:     width,
+        HeightCM:    height,
+        TextureID:   texture.ID,
+        TextureName: texture.Name,
+        Price:       priceDetails["final_price"],
+        LeatherCost: priceDetails["leather_cost"],
+        ProcessCost: priceDetails["processing_cost"],
+        TotalCost:   priceDetails["total_cost"],
+        Commission:  priceDetails["commission"],
+        Tax:         priceDetails["tax"],
+        NetRevenue:  priceDetails["net_revenue"],
+        Profit:      priceDetails["profit"],
+        Contact:     phone,
+        Status:      "new",
+        CreatedAt:   time.Now(),
     }
 
     // Save to database
