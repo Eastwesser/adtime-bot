@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.uber.org/zap"
@@ -164,88 +163,6 @@ func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {
 func (b *Bot) sendError(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, "❌ "+text)
 	b.sendMessage(msg)
-}
-
-func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
-    state, err := b.state.GetFullState(ctx, chatID)
-    if err != nil {
-        return 0, fmt.Errorf("failed to get order state: %w", err)
-    }
-
-    width, height, err := b.state.GetDimensions(ctx, chatID)
-    if err != nil {
-        return 0, fmt.Errorf("failed to get dimensions: %w", err)
-    }
-
-    // Get or set default texture
-    var texture *storage.Texture
-    if state.TextureID != "" {
-        texture, err = b.storage.GetTextureByID(ctx, state.TextureID)
-        if err != nil {
-            return 0, fmt.Errorf("failed to get texture: %w", err)
-        }
-    } else {
-        texture = &storage.Texture{
-            ID:          "11111111-1111-1111-1111-111111111111",
-            Name:        "Стандартная текстура",
-            PricePerDM2: 10.0,
-        }
-    }
-
-    // Create pricing config from bot's configuration
-    pricingConfig := PricingConfig{
-        LeatherPricePerDM2:    b.cfg.Pricing.LeatherPricePerDM2,
-        ProcessingCostPerDM2:  b.cfg.Pricing.ProcessingCostPerDM2,
-        PaymentCommissionRate: b.cfg.Pricing.PaymentCommissionRate,
-        SalesTaxRate:          b.cfg.Pricing.SalesTaxRate,
-        MarkupMultiplier:      b.cfg.Pricing.MarkupMultiplier,
-    }
-
-    // Calculate pricing
-    priceDetails := CalculatePrice(width, height, pricingConfig)
-
-    order := storage.Order{
-        UserID:       chatID,
-        WidthCM:      width,
-        HeightCM:     height,
-        TextureID:    texture.ID,
-        TextureName:  texture.Name,
-        LeatherCost:  priceDetails["leather_cost"],
-        ProcessCost:  priceDetails["processing_cost"],
-        TotalCost:    priceDetails["total_cost"],
-        FinalPrice:   priceDetails["final_price"],
-        Commission:   priceDetails["commission"],
-        Tax:          priceDetails["tax"],
-        NetRevenue:   priceDetails["net_revenue"],
-        Profit:       priceDetails["profit"],
-        Contact:      phone,
-        Status:       "new",
-        CreatedAt:    time.Now(),
-    }
-
-    // Save to database
-    orderID, err := b.storage.SaveOrder(ctx, order)
-    if err != nil {
-        return 0, fmt.Errorf("failed to save order: %w", err)
-    }
-
-    // Export to Excel
-    if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
-        b.logger.Error("Failed to export order to Excel",
-            zap.Int64("order_id", orderID),
-            zap.Error(err))
-    }
-
-    // Send order details
-    msgText := fmt.Sprintf(
-        "✅ Заказ #%d оформлен!\n%s\n\nКонтакт: %s",
-        orderID,
-        FormatPriceBreakdown(width, height, priceDetails),
-        FormatPhoneNumber(phone),
-    )
-    b.sendMessage(tgbotapi.NewMessage(chatID, msgText))
-
-    return orderID, nil
 }
 
 func (b *Bot) getTexture(ctx context.Context, textureID string) (*storage.Texture, error) {

@@ -285,96 +285,20 @@ func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string
 		}
 	}
 }
-
 func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
+    normalized := NormalizePhoneNumber(text)
     
-	normalized := NormalizePhoneNumber(text)
-	
-	if !IsValidPhoneNumber(normalized) {
+    if !IsValidPhoneNumber(normalized) {
         b.sendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567 или 89123456789)")
         return
     }
 
-	b.logger.Debug("Phone number validation",
-    zap.String("input", text),
-    zap.String("normalized", normalized),
-    zap.Bool("is_valid", IsValidPhoneNumber(normalized)))
-
-    // Получаем полное состояние
-    state, err := b.state.GetFullState(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get order state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при обработке заказа")
-        return
-    }
-
-    // Получаем размеры
-    width, height, err := b.state.GetDimensions(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get dimensions",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении размеров")
-        return
-    }
-
-	textureID := nil
-	textureName := nil
-	order := storage.Order{
-        UserID:       chatID,
-        WidthCM:      width,
-        HeightCM:     height,
-        TextureID:    textureID,
-        TextureName:  textureName,
-        LeatherCost:  priceDetails["leather_cost"],
-        ProcessCost:  priceDetails["processing_cost"],
-        TotalCost:    priceDetails["total_cost"],
-        FinalPrice:   priceDetails["final_price"],
-        Commission:   priceDetails["commission"],
-        Tax:          priceDetails["tax"],
-        NetRevenue:   priceDetails["net_revenue"],
-        Profit:       priceDetails["profit"],
-        Contact:      normalized,
-        Status:       "new",
-        CreatedAt:    time.Now(),
-    }
-
-    // Получаем текстуру (если выбрана)
-    if state.TextureID != "" {
-        texture, err := b.storage.GetTextureByID(ctx, state.TextureID)
-        if err != nil {
-            b.logger.Error("Failed to get texture",
-                zap.String("texture_id", state.TextureID),
-                zap.Error(err))
-            b.sendError(chatID, "Ошибка при получении текстуры")
-            return
-        }
-        textureID = texture.ID
-        textureName = texture.Name
-        } else {
-        // Если текстура не выбрана, используем значения по умолчанию
-        textureID = "11111111-1111-1111-1111-111111111111" // Пример UUID
-        textureName = "Стандартная текстура"
-    }
-
-	priceDetails := CalculatePrice(width, height, NewDefaultPricing())
-	orderID := nil
-	msgText := fmt.Sprintf(
-		"✅ Заказ #%d оформлен!\n%s\n\nКонтакт: %s",
-		orderID,
-		FormatPriceBreakdown(width, height, priceDetails),
-		normalized,
-	)
-	b.sendMessage(tgbotapi.NewMessage(chatID, msgText))
-
-	b.logger.Debug("Phone number validation",
+    b.logger.Debug("Phone number validation",
         zap.String("input", text),
         zap.String("normalized", normalized),
         zap.Bool("is_valid", IsValidPhoneNumber(normalized)))
-		
-	// Create and save the order
+
+    // Create and save the order
     orderID, err := b.createOrder(ctx, chatID, normalized)
     if err != nil {
         b.logger.Error("Failed to create order",
@@ -382,13 +306,6 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
             zap.Error(err))
         b.sendError(chatID, "Ошибка при оформлении заказа")
         return
-    }
-
-	// Экспорт в Excel
-    if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
-        b.logger.Error("Failed to export order to Excel",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
     }
 
     // Clear user state
@@ -401,6 +318,88 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     // Send final confirmation
     b.sendMessage(tgbotapi.NewMessage(chatID,
         "✅ Ваш заказ успешно оформлен!\nНомер заказа: #"+strconv.FormatInt(orderID, 10)))
+}
+
+func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
+    state, err := b.state.GetFullState(ctx, chatID)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get order state: %w", err)
+    }
+
+    width, height, err := b.state.GetDimensions(ctx, chatID)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get dimensions: %w", err)
+    }
+
+    // Get or set default texture
+    var texture *storage.Texture
+    if state.TextureID != "" {
+        texture, err = b.storage.GetTextureByID(ctx, state.TextureID)
+        if err != nil {
+            return 0, fmt.Errorf("failed to get texture: %w", err)
+        }
+    } else {
+        texture = &storage.Texture{
+            ID:          "11111111-1111-1111-1111-111111111111",
+            Name:        "Стандартная текстура",
+            PricePerDM2: 10.0,
+        }
+    }
+
+    // Create pricing config from bot's configuration
+    pricingConfig := PricingConfig{
+        LeatherPricePerDM2:    b.cfg.Pricing.LeatherPricePerDM2,
+        ProcessingCostPerDM2:  b.cfg.Pricing.ProcessingCostPerDM2,
+        PaymentCommissionRate: b.cfg.Pricing.PaymentCommissionRate,
+        SalesTaxRate:          b.cfg.Pricing.SalesTaxRate,
+        MarkupMultiplier:      b.cfg.Pricing.MarkupMultiplier,
+    }
+
+    // Calculate pricing
+    priceDetails := CalculatePrice(width, height, pricingConfig)
+
+    order := storage.Order{
+        UserID:       chatID,
+        WidthCM:      width,
+        HeightCM:     height,
+        TextureID:    texture.ID,
+        TextureName:  texture.Name,
+        LeatherCost:  priceDetails["leather_cost"],
+        ProcessCost:  priceDetails["processing_cost"],
+        TotalCost:    priceDetails["total_cost"],
+        FinalPrice:   priceDetails["final_price"],
+        Commission:   priceDetails["commission"],
+        Tax:          priceDetails["tax"],
+        NetRevenue:   priceDetails["net_revenue"],
+        Profit:       priceDetails["profit"],
+        Contact:      phone,
+        Status:       "new",
+        CreatedAt:    time.Now(),
+    }
+
+    // Save to database
+    orderID, err := b.storage.SaveOrder(ctx, order)
+    if err != nil {
+        return 0, fmt.Errorf("failed to save order: %w", err)
+    }
+
+    // Export to Excel
+    if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
+        b.logger.Error("Failed to export order to Excel",
+            zap.Int64("order_id", orderID),
+            zap.Error(err))
+    }
+
+    // Send order details
+    msgText := fmt.Sprintf(
+        "✅ Заказ #%d оформлен!\n%s\n\nКонтакт: %s",
+        orderID,
+        FormatPriceBreakdown(width, height, priceDetails),
+        FormatPhoneNumber(phone),
+    )
+    b.sendMessage(tgbotapi.NewMessage(chatID, msgText))
+
+    return orderID, nil
 }
 
 func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
