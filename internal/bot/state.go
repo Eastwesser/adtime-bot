@@ -175,5 +175,3 @@ func (s *StateStorage) SetServiceType(ctx context.Context, chatID int64, service
     state.ServiceType = serviceType
     return s.Save(ctx, chatID, state)
 }
-
-

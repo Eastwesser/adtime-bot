@@ -45,7 +45,7 @@ func New(addr, password string, db int, ttl time.Duration) *Client {
 	}
 }
 
-func (c *Client) SaveState(ctx context.Context, chatID int64, state interface{}) error {
+func (c *Client) SaveState(ctx context.Context, chatID int64, state any) error {
 	data, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("marshal state: %w", err)

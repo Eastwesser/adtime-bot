@@ -15,10 +15,10 @@ import (
 func (b *Bot) handleStart(ctx context.Context, chatID int64) {
     text := `Привет! 👋
 
-⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-Используя этого бота, вы соглашаетесь на обработку персональных данных.
+	⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
+	Используя этого бота, вы соглашаетесь на обработку персональных данных.
 
-Если всё ок — нажмите кнопку ниже 👇`
+	Если всё ок — нажмите кнопку ниже 👇`
 
     msg := tgbotapi.NewMessage(chatID, text)
     msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
@@ -30,7 +30,6 @@ func (b *Bot) handleStart(ctx context.Context, chatID int64) {
             zap.Error(err))
     }
 }
-
 
 func (b *Bot) handleCommand(ctx context.Context, chatID int64, command string) {
 	switch command {
@@ -86,18 +85,26 @@ func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text str
 }
 
 func (b *Bot) handleServiceSelection(ctx context.Context, chatID int64, text string) {
-	if text != "✅ Оформить заказ" {
-		b.sendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Оформить заказ\" чтобы продолжить")
-		return
-	}
+    if text != "✅ Оформить заказ" {
+        b.sendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Оформить заказ\" чтобы продолжить")
+        return
+    }
 
-	msg := tgbotapi.NewMessage(chatID, "Какую услугу вы хотите заказать?")
-	b.sendMessage(msg)
-	if err := b.state.SetStep(ctx, chatID, StepServiceInput); err != nil {
-		b.logger.Error("Failed to set service input state",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-	}
+    // Show service type options immediately
+    msg := tgbotapi.NewMessage(chatID, "Выберите тип услуги:")
+    msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Печать наклеек"),
+            tgbotapi.NewKeyboardButton("Другая услуга"),
+        ),
+    )
+    b.sendMessage(msg)
+    
+    if err := b.state.SetStep(ctx, chatID, StepServiceType); err != nil {
+        b.logger.Error("Failed to set service type state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
 }
 
 // func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string) {
@@ -140,33 +147,46 @@ func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string)
 }
 
 func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text string) {
-	parts := strings.Split(text, " ")
-	if len(parts) != 2 {
-		b.sendError(chatID, "Неверный формат. Введите ширину и длину через пробел")
-		return
-	}
+    b.logger.Debug("Handling dimensions input", 
+        zap.Int64("chat_id", chatID),
+        zap.String("input", text))
+		
+    parts := strings.Split(text, " ")
+    if len(parts) != 2 {
+        b.sendError(chatID, "Неверный формат. Введите ширину и длину через пробел")
+        return
+    }
 
-	width, err := strconv.Atoi(parts[0])
-	if err != nil || width <= 0 || width > 80 {
-		b.sendError(chatID, "Некорректная ширина. Допустимый диапазон: 1-80 см")
-		return
-	}
+    width, err := strconv.Atoi(parts[0])
+    if err != nil || width <= 0 || width > 80 {
+        b.sendError(chatID, "Некорректная ширина. Допустимый диапазон: 1-80 см")
+        return
+    }
 
-	height, err := strconv.Atoi(parts[1])
-	if err != nil || height <= 0 || height > 50 {
-		b.sendError(chatID, "Некорректная длина. Допустимый диапазон: 1-50 см")
-		return
-	}
+    height, err := strconv.Atoi(parts[1])
+    if err != nil || height <= 0 || height > 50 {
+        b.sendError(chatID, "Некорректная длина. Допустимый диапазон: 1-50 см")
+        return
+    }
 
-	if err := b.state.SetDimensions(ctx, chatID, width, height); err != nil {
-		b.logger.Error("Failed to set dimensions",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-		b.sendError(chatID, "Ошибка при сохранении размеров")
-		return
-	}
+    if err := b.state.SetDimensions(ctx, chatID, width, height); err != nil {
+        b.logger.Error("Failed to set dimensions",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при сохранении размеров")
+        return
+    }
 
-	b.showTextures(ctx, chatID)
+    // After setting dimensions, proceed to date selection
+    msg := tgbotapi.NewMessage(chatID, "Когда вам удобно выполнить заказ?")
+    msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
+    b.sendMessage(msg)
+    
+    if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
+        b.logger.Error("Failed to set date selection state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
 }
 
 func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
@@ -488,63 +508,63 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     }
 }
 
-func (b *Bot) showTextures(ctx context.Context, chatID int64) {
-    width, height, err := b.state.GetDimensions(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get dimensions",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении размеров")
-        return
-    }
+// func (b *Bot) showTextures(ctx context.Context, chatID int64) {
+//     width, height, err := b.state.GetDimensions(ctx, chatID)
+//     if err != nil {
+//         b.logger.Error("Failed to get dimensions",
+//             zap.Int64("chat_id", chatID),
+//             zap.Error(err))
+//         b.sendError(chatID, "Ошибка при получении размеров")
+//         return
+//     }
 
-    // Validate max dimensions
-    if width > 80 || height > 50 {
-        b.sendError(chatID, "Максимальный размер: 80x50 см")
-        return
-    }
+//     // Validate max dimensions
+//     if width > 80 || height > 50 {
+//         b.sendError(chatID, "Максимальный размер: 80x50 см")
+//         return
+//     }
 
-    // textures, err := b.storage.GetAvailableTextures(ctx)
-    // if err != nil {
-    //     b.logger.Error("Failed to get textures",
-    //         zap.Int64("chat_id", chatID),
-    //         zap.Error(err))
-    //     b.sendError(chatID, "Не удалось загрузить варианты текстуры")
-    //     return
-    // }
+//     textures, err := b.storage.GetAvailableTextures(ctx)
+//     if err != nil {
+//         b.logger.Error("Failed to get textures",
+//             zap.Int64("chat_id", chatID),
+//             zap.Error(err))
+//         b.sendError(chatID, "Не удалось загрузить варианты текстуры")
+//         return
+//     }
 
-    // var buttons []tgbotapi.InlineKeyboardButton
-    // for _, texture := range textures {
-    //     price := CalculatePrice(width, height, texture.PricePerDM2)
-    //     btn := tgbotapi.NewInlineKeyboardButtonData(
-    //         fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
-    //         fmt.Sprintf("texture:%s", texture.ID),
-    //     )
-    //     buttons = append(buttons, btn)
-    // }
+//     var buttons []tgbotapi.InlineKeyboardButton
+//     for _, texture := range textures {
+//         price := CalculatePrice(width, height, texture.PricePerDM2)
+//         btn := tgbotapi.NewInlineKeyboardButtonData(
+//             fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
+//             fmt.Sprintf("texture:%s", texture.ID),
+//         )
+//         buttons = append(buttons, btn)
+//     }
 
-    // if len(buttons) == 0 {
-    //     b.sendError(chatID, "Нет доступных текстур")
-    //     return
-    // }
+//     if len(buttons) == 0 {
+//         b.sendError(chatID, "Нет доступных текстур")
+//         return
+//     }
 
-    // // Send texture image if available
-    // if textures[0].ImageURL != "" {
-    //     photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
-    //     photo.Caption = "Образцы доступных текстур:"
-    //     if _, err := b.bot.Send(photo); err != nil {
-    //         b.logger.Error("Failed to send photo",
-    //             zap.Int64("chat_id", chatID),
-    //             zap.Error(err))
-    //     }
-    // }
+//     // Send texture image if available
+//     if textures[0].ImageURL != "" {
+//         photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
+//         photo.Caption = "Образцы доступных текстур:"
+//         if _, err := b.bot.Send(photo); err != nil {
+//             b.logger.Error("Failed to send photo",
+//                 zap.Int64("chat_id", chatID),
+//                 zap.Error(err))
+//         }
+//     }
 
-    // msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
-    // msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-    //     tgbotapi.NewInlineKeyboardRow(buttons...),
-    // )
-    // b.sendMessage(msg)
-}
+//     msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
+//     msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+//         tgbotapi.NewInlineKeyboardRow(buttons...),
+//     )
+//     b.sendMessage(msg)
+// }
 
 func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) {
     // Validate service type
@@ -558,11 +578,11 @@ func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    if err := b.state.SetServiceType(ctx, chatID, text); err != nil {
-        b.logger.Error("Failed to set service type",
+    if err := b.state.SetService(ctx, chatID, text); err != nil {
+        b.logger.Error("Failed to set service",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении типа услуги")
+        b.sendError(chatID, "Ошибка при сохранении услуги")
         return
     }
 
@@ -587,3 +607,4 @@ func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string
         }
     }
 }
+
