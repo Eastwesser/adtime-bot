@@ -3,19 +3,17 @@ package bot
 import (
 	"adtime-bot/internal/config"
 	"adtime-bot/internal/storage"
-	"adtime-bot/pkg/api"
 	"adtime-bot/pkg/redis"
 	"context"
 	"fmt"
-	"strings"
 	"sync"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.uber.org/zap"
 )
 
 type Bot struct {
-	api      *api.Client
 	bot      *tgbotapi.BotAPI
 	logger   *zap.Logger
 	state    *StateStorage
@@ -25,28 +23,37 @@ type Bot struct {
 	handlers map[string]func(context.Context, int64, string)
 }
 
+const (
+	StepPrivacyAgreement = "privacy_agreement"
+	StepServiceSelection = "service_selection"
+	StepServiceType      = "service_type"
+	StepDimensions       = "dimensions"
+	StepDateSelection    = "date_selection"
+	StepManualDateInput  = "manual_date_input"
+	StepDateConfirmation = "date_confirmation"
+	StepContactMethod    = "contact_method"
+	StepPhoneNumber      = "phone_number"
+)
+
 func New(
-    token string,
-    apiClient *api.Client,
-    redisClient *redis.Client,
-    pgStorage *storage.PostgresStorage,
-    logger *zap.Logger,
-    cfg *config.Config,
+	token string,
+	redisClient *redis.Client,
+	pgStorage *storage.PostgresStorage,
+	logger *zap.Logger,
+	cfg *config.Config,
 ) (*Bot, error) {
-    botAPI, err := tgbotapi.NewBotAPI(token)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create bot API: %w", err)
-    }
+	botAPI, err := tgbotapi.NewBotAPI(token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bot API: %w", err)
+	}
 
-	botAPI.Debug = true // Enable debug for now
-	// botAPI.Debug = false // for prod
+	botAPI.Debug = true // Enable debug for development
 
-	logger.Info("Bot authorized", 
-        zap.String("username", botAPI.Self.UserName),
-        zap.Int64("id", botAPI.Self.ID))
+	logger.Info("Bot authorized",
+		zap.String("username", botAPI.Self.UserName),
+		zap.Int64("id", botAPI.Self.ID))
 
 	b := &Bot{
-		// api:     apiClient,
 		bot:     botAPI,
 		logger:  logger,
 		state:   NewStateStorage(redisClient),
@@ -59,18 +66,17 @@ func New(
 }
 
 func (b *Bot) registerHandlers() {
-    b.handlers = map[string]func(context.Context, int64, string){
-        StepPrivacyAgreement:   b.handlePrivacyAgreement,
-        StepServiceSelection:   b.handleServiceSelection,
-        StepServiceInput:       b.handleServiceInput,
-        StepServiceType:        b.handleServiceType, // New handler
-        StepDimensions:         b.handleDimensionsSize,
-        StepDateSelection:      b.handleDateSelection,
-        StepManualDateInput:    b.handleManualDateInput,
-        StepDateConfirmation:   b.handleDateConfirmation,
-        StepContactMethod:      b.handleContactMethod, // New handler
-        StepPhoneNumber:        b.handlePhoneNumber,
-    }
+	b.handlers = map[string]func(context.Context, int64, string){
+		StepPrivacyAgreement: b.handlePrivacyAgreement,
+		StepServiceSelection: b.handleServiceSelection,
+		StepServiceType:      b.handleServiceType,
+		StepDimensions:       b.handleDimensionsSize,
+		StepDateSelection:    b.handleDateSelection,
+		StepManualDateInput:  b.handleManualDateInput,
+		StepDateConfirmation: b.handleDateConfirmation,
+		StepContactMethod:    b.handleContactMethod,
+		StepPhoneNumber:      b.handlePhoneNumber,
+	}
 }
 
 func (b *Bot) Start(ctx context.Context) error {
@@ -100,14 +106,16 @@ func (b *Bot) Start(ctx context.Context) error {
 
 func (b *Bot) processMessage(ctx context.Context, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
-    
-    // Handle contact sharing
-    if msg.Contact != nil {
-        if state, err := b.state.Get(ctx, chatID); err == nil && state.Step == StepContactMethod {
-            b.handlePhoneNumber(ctx, chatID, msg.Contact.PhoneNumber)
-            return
-        }
-    }
+
+	if msg.Contact != nil {
+		if state, err := b.state.Get(ctx, chatID); err == nil && state.Step == StepContactMethod {
+			// Normalize the contact phone number before processing
+			normalized := NormalizePhoneNumber(msg.Contact.PhoneNumber)
+			b.handlePhoneNumber(ctx, chatID, normalized)
+			return
+		}
+	}
+
 	b.logger.Debug("Processing message",
 		zap.Int64("chat_id", chatID),
 		zap.String("text", msg.Text))
@@ -134,21 +142,14 @@ func (b *Bot) processMessage(ctx context.Context, msg *tgbotapi.Message) {
 }
 
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-    chatID := callback.Message.Chat.ID // This is int64
-    data := callback.Data
+	chatID := callback.Message.Chat.ID
+	data := callback.Data
 
-    b.logger.Debug("Processing callback",
-        zap.Int64("chat_id", chatID),
-        zap.String("data", data))
+	b.logger.Debug("Processing callback",
+		zap.Int64("chat_id", chatID),
+		zap.String("data", data))
 
-    if !strings.HasPrefix(data, "texture:") {
-        b.logger.Warn("Unknown callback data format", 
-            zap.String("data", data))
-        b.sendError(chatID, "Неизвестный формат команды")
-        return
-    }
-    // Handle texture selection here or call another method
-    b.handleTextureSelection(ctx, callback)
+	b.handleTextureSelection(ctx, callback)
 }
 
 func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {
@@ -165,14 +166,102 @@ func (b *Bot) sendError(chatID int64, text string) {
 	b.sendMessage(msg)
 }
 
-// func (b *Bot) sendAdminNotification(ctx context.Context, message string) {
-//     for _, adminID := range b.cfg.Admin.IDs {
-//         msg := tgbotapi.NewMessage(adminID, message)
-//         if _, err := b.bot.Send(msg); err != nil {
-//             b.logger.Error("Failed to send admin notification",
-//                 zap.Int64("admin_id", adminID),
-//                 zap.Error(err))
-//         }
-//     }
-// }
+func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
+    state, err := b.state.GetFullState(ctx, chatID)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get order state: %w", err)
+    }
 
+    width, height, err := b.state.GetDimensions(ctx, chatID)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get dimensions: %w", err)
+    }
+
+    // Get or set default texture
+    var texture *storage.Texture
+    if state.TextureID != "" {
+        texture, err = b.storage.GetTextureByID(ctx, state.TextureID)
+        if err != nil {
+            return 0, fmt.Errorf("failed to get texture: %w", err)
+        }
+    } else {
+        texture = &storage.Texture{
+            ID:          "11111111-1111-1111-1111-111111111111",
+            Name:        "Стандартная текстура",
+            PricePerDM2: 10.0,
+        }
+    }
+
+    // Create pricing config from bot's configuration
+    pricingConfig := PricingConfig{
+        LeatherPricePerDM2:    b.cfg.Pricing.LeatherPricePerDM2,
+        ProcessingCostPerDM2:  b.cfg.Pricing.ProcessingCostPerDM2,
+        PaymentCommissionRate: b.cfg.Pricing.PaymentCommissionRate,
+        SalesTaxRate:          b.cfg.Pricing.SalesTaxRate,
+        MarkupMultiplier:      b.cfg.Pricing.MarkupMultiplier,
+    }
+
+    // Calculate pricing
+    priceDetails := CalculatePrice(width, height, pricingConfig)
+
+    order := storage.Order{
+        UserID:       chatID,
+        WidthCM:      width,
+        HeightCM:     height,
+        TextureID:    texture.ID,
+        TextureName:  texture.Name,
+        LeatherCost:  priceDetails["leather_cost"],
+        ProcessCost:  priceDetails["processing_cost"],
+        TotalCost:    priceDetails["total_cost"],
+        FinalPrice:   priceDetails["final_price"],
+        Commission:   priceDetails["commission"],
+        Tax:          priceDetails["tax"],
+        NetRevenue:   priceDetails["net_revenue"],
+        Profit:       priceDetails["profit"],
+        Contact:      phone,
+        Status:       "new",
+        CreatedAt:    time.Now(),
+    }
+
+    // Save to database
+    orderID, err := b.storage.SaveOrder(ctx, order)
+    if err != nil {
+        return 0, fmt.Errorf("failed to save order: %w", err)
+    }
+
+    // Export to Excel
+    if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
+        b.logger.Error("Failed to export order to Excel",
+            zap.Int64("order_id", orderID),
+            zap.Error(err))
+    }
+
+    // Send order details
+    msgText := fmt.Sprintf(
+        "✅ Заказ #%d оформлен!\n%s\n\nКонтакт: %s",
+        orderID,
+        FormatPriceBreakdown(width, height, priceDetails),
+        FormatPhoneNumber(phone),
+    )
+    b.sendMessage(tgbotapi.NewMessage(chatID, msgText))
+
+    return orderID, nil
+}
+
+func (b *Bot) getTexture(ctx context.Context, textureID string) (*storage.Texture, error) {
+    if textureID == "" {
+        // Return default texture if none selected
+        return &storage.Texture{
+            ID:          "11111111-1111-1111-1111-111111111111",
+            Name:       "Стандартная текстура",
+            PricePerDM2: 10.0,
+        }, nil
+    }
+    
+    texture, err := b.storage.GetTextureByID(ctx, textureID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get texture: %w", err)
+    }
+    
+    return texture, nil
+}

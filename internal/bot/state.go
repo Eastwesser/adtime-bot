@@ -8,40 +8,21 @@ import (
 	"time"
 )
 
-const (
-    StepPrivacyAgreement = "privacy_agreement"
-    StepServiceSelection = "service_selection"
-    StepServiceInput     = "service_input"
-    StepServiceType      = "service_type"  // New state
-    StepDimensions       = "dimensions"
-    StepDateSelection    = "date_selection"
-    StepManualDateInput  = "manual_date_input"
-    StepDateConfirmation = "date_confirmation"
-    StepContactMethod    = "contact_method" // New state
-    StepPhoneNumber      = "phone_number"
-)
-
-// Update UserState struct to include ServiceType
 type UserState struct {
-    Step         string `json:"step"`
-    Service      string `json:"service"`
-    ServiceType  string `json:"service_type"` // New field
-    Date         string `json:"date"`
-    PhoneNumber  string `json:"phone_number"`
-    WidthCM      int    `json:"width_cm"`
-    HeightCM     int    `json:"height_cm"`
-    TextureID    string `json:"texture_id"`
-    Price        string `json:"price"`
+	Step         string `json:"step"`
+	Service      string `json:"service"`
+	ServiceType  string `json:"service_type"`
+	Date         string `json:"date"`
+	PhoneNumber  string `json:"phone_number"`
+	WidthCM      int    `json:"width_cm"`
+	HeightCM     int    `json:"height_cm"`
+	TextureID    string `json:"texture_id"`
+	Price        string `json:"price"`
 }
 
 type StateStorage struct {
 	redis *redis.Client
 	ttl   time.Duration
-}
-
-type State interface {
-    GetTextureID(ctx context.Context, chatID int64) (string, error)
-    SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error
 }
 
 func NewStateStorage(redis *redis.Client) *StateStorage {
@@ -88,7 +69,7 @@ func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
 }
 
 func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
-    return s.Clear(ctx, chatID)
+	return s.Clear(ctx, chatID)
 }
 
 func (s *StateStorage) SetStep(ctx context.Context, chatID int64, step string) error {
@@ -138,21 +119,21 @@ func (s *StateStorage) SetPhoneNumber(ctx context.Context, chatID int64, phone s
 }
 
 func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
-    state, err := s.Get(ctx, chatID)
-    if err != nil {
-        state = UserState{}
-    }
-    state.TextureID = textureID
-    state.Price = fmt.Sprintf("%.2f", price)
-    return s.Save(ctx, chatID, state)
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		state = UserState{}
+	}
+	state.TextureID = textureID
+	state.Price = fmt.Sprintf("%.2f", price)
+	return s.Save(ctx, chatID, state)
 }
 
 func (s *StateStorage) GetTextureID(ctx context.Context, chatID int64) (string, error) {
-    state, err := s.Get(ctx, chatID)
-    if err != nil {
-        return "", err
-    }
-    return state.TextureID, nil
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		return "", err
+	}
+	return state.TextureID, nil
 }
 
 func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, height int, err error) {
@@ -168,10 +149,16 @@ func getStateKey(chatID int64) string {
 }
 
 func (s *StateStorage) SetServiceType(ctx context.Context, chatID int64, serviceType string) error {
-    state, err := s.Get(ctx, chatID)
-    if err != nil {
-        state = UserState{}
-    }
-    state.ServiceType = serviceType
-    return s.Save(ctx, chatID, state)
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		state = UserState{}
+	}
+	state.ServiceType = serviceType
+	return s.Save(ctx, chatID, state)
+}
+
+func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
+    return s.Save(ctx, chatID, UserState{
+        Step: StepPrivacyAgreement,
+    })
 }

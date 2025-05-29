@@ -4,9 +4,7 @@ import (
 	"adtime-bot/internal/bot"
 	"adtime-bot/internal/config"
 	"adtime-bot/internal/storage"
-	// "adtime-bot/pkg/api"
-	"adtime-bot/pkg/logger"
-	"adtime-bot/pkg/redis"
+	"adtime-bot/pkg/redis" // Добавляем импорт
 	"context"
 	"fmt"
 	"os"
@@ -14,69 +12,49 @@ import (
 	"syscall"
 
 	"go.uber.org/zap"
-	_ "github.com/lib/pq"
 )
 
 func main() {
 	// Initialize logger
-
-	fmt.Println("Loading configuration...")
-    
-    cfg, err := config.Load()
-    if err != nil {
-        fmt.Printf("Config error: %v\n", err)
-        os.Exit(1)
-    }
-    
-    fmt.Printf("Config loaded: %+v\n", cfg)
-
-	zapLogger, err := logger.New()
+	logger, err := zap.NewProduction()
 	if err != nil {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
-	defer zapLogger.Sync()
+	defer logger.Sync()
 
-	// // Load configuration
-	// cfg, err := config.Load()
-	// if err != nil {
-	// 	zapLogger.Fatal("Failed to load config", zap.Error(err))
-	// }
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("Failed to load config", zap.Error(err))
+	}
 
-	// Initialize Redis client
+	// Initialize Redis client (используем pkg/redis)
 	redisClient := redis.New(
 		cfg.Redis.Addr, 
 		cfg.Redis.Password, 
 		cfg.Redis.DB, 
 		cfg.Redis.TTL,
 	)
+	defer redisClient.Close()
 
 	// Initialize PostgreSQL storage
-	pgStorage, err := storage.NewPostgresStorage(context.Background(), *cfg, zapLogger)
+	pgStorage, err := storage.NewPostgresStorage(context.Background(), *cfg, logger)
 	if err != nil {
-		zapLogger.Fatal("Failed to init PostgreSQL storage", zap.Error(err))
+		logger.Fatal("Failed to init PostgreSQL storage", zap.Error(err))
 	}
 	defer pgStorage.Close()
-
-	// // Initialize API client
-	// apiClient := api.NewClient(
-	// 	cfg.API.BaseURL, 
-	// 	cfg.API.Key, 
-	// 	zapLogger, 
-	// 	cfg.API.RequestTimeout,
-	// )
 
 	// Create bot instance
 	tgBot, err := bot.New(
 		cfg.Telegram.Token,
-		nil, // apiClient,
 		redisClient,
 		pgStorage,
-		zapLogger,
+		logger,
 		cfg,
 	)
 	if err != nil {
-		zapLogger.Fatal("Failed to create bot", zap.Error(err))
+		logger.Fatal("Failed to create bot", zap.Error(err))
 	}
 
 	// Handle shutdown signals
@@ -88,10 +66,10 @@ func main() {
 	defer cancel()
 
 	// Start the bot
-	zapLogger.Info("Starting bot")
+	logger.Info("Starting bot")
 	if err := tgBot.Start(ctx); err != nil {
-		zapLogger.Fatal("Bot stopped with error", zap.Error(err))
+		logger.Fatal("Bot stopped with error", zap.Error(err))
 	}
 
-	zapLogger.Info("Bot shutdown gracefully")
+	logger.Info("Bot shutdown gracefully")
 }

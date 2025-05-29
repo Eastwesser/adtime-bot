@@ -13,13 +13,6 @@ type Config struct {
 		Token string `env:"TELEGRAM_TOKEN,required"`
 	}
 
-	// Make these optional
-	API struct {
-		BaseURL         string        `env:"API_BASE_URL" envDefault:""`
-		Key             string        `env:"API_KEY" envDefault:""`
-		RequestTimeout  time.Duration `env:"HTTP_REQUEST_TIMEOUT" envDefault:"30s"`
-	}
-
 	Redis struct {
 		Addr     string        `env:"REDIS_ADDR" envDefault:"localhost:6379"`
 		Password string        `env:"REDIS_PASSWORD" envDefault:""`
@@ -42,6 +35,14 @@ type Config struct {
 	Admin struct {
 		IDs []int64 `env:"ADMIN_IDS" envSeparator:"," envDefault:"0"`
 	}
+
+	Pricing struct {
+        LeatherPricePerDM2    float64 `env:"LEATHER_PRICE_PER_DM2" envDefault:"25.0"`
+        ProcessingCostPerDM2  float64 `env:"PROCESSING_COST_PER_DM2" envDefault:"31.25"`
+        PaymentCommissionRate float64 `env:"PAYMENT_COMMISSION_RATE" envDefault:"0.03"`
+        SalesTaxRate          float64 `env:"SALES_TAX_RATE" envDefault:"0.06"`
+        MarkupMultiplier      float64 `env:"MARKUP_MULTIPLIER" envDefault:"2.5"`
+    }
 }
 
 func Load() (*Config, error) {
@@ -50,18 +51,41 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	// // Validate required fields
-	// if len(cfg.Admin.IDs) == 0 {
-	// 	return nil, fmt.Errorf("at least one admin ID is required")
-	// }
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 
 	return &cfg, nil
 }
 
 func (c *Config) Validate() error {
-    if c.Database.Host == "" {
-        return errors.New("database host is required")
+	if c.Telegram.Token == "" {
+		return errors.New("telegram token is required")
+	}
+
+	if c.Database.Host == "" {
+		return errors.New("database host is required")
+	}
+
+	if c.Database.Name == "" {
+		return errors.New("database name is required")
+	}
+
+	return nil
+}
+
+type Pricing struct {
+        LeatherPricePerDM2    float64 `env:"LEATHER_PRICE_PER_DM2" envDefault:"25.0"`
+		ProcessingCostPerDM2  float64 `env:"PROCESSING_COST_PER_DM2" envDefault:"31.25"`
+		PaymentCommissionRate float64 `env:"PAYMENT_COMMISSION_RATE" envDefault:"0.03"`
+		SalesTaxRate          float64 `env:"SALES_TAX_RATE" envDefault:"0.06"`
+		MarkupMultiplier      float64 `env:"MARKUP_MULTIPLIER" envDefault:"2.5"`
+}
+
+func (p Pricing) Validate() error {
+    if p.LeatherPricePerDM2 <= 0 {
+        return errors.New("leather price must be positive")
     }
-    // Add other validations as needed
+    // Add other validations...
     return nil
 }

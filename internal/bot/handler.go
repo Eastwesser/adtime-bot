@@ -13,22 +13,22 @@ import (
 )
 
 func (b *Bot) handleStart(ctx context.Context, chatID int64) {
-    text := `Привет! 👋
+	text := `Привет! 👋
 
-	⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-	Используя этого бота, вы соглашаетесь на обработку персональных данных.
+⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
+Используя этого бота, вы соглашаетесь на обработку персональных данных.
 
-	Если всё ок — нажмите кнопку ниже 👇`
+Если всё ок — нажмите кнопку ниже 👇`
 
-    msg := tgbotapi.NewMessage(chatID, text)
-    msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
-    b.sendMessage(msg)
-    
-    if err := b.state.SetStep(ctx, chatID, StepPrivacyAgreement); err != nil {
-        b.logger.Error("Failed to set privacy agreement state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
+	b.sendMessage(msg)
+	
+	if err := b.state.SetStep(ctx, chatID, StepPrivacyAgreement); err != nil {
+		b.logger.Error("Failed to set privacy agreement state",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+	}
 }
 
 func (b *Bot) handleCommand(ctx context.Context, chatID int64, command string) {
@@ -51,16 +51,14 @@ func (b *Bot) handleUnknownCommand(ctx context.Context, chatID int64) {
 }
 
 func (b *Bot) handleHelp(ctx context.Context, chatID int64) {
-    helpText := `Доступные команды:
-		/start - Начать работу с ботом
-		/help - Показать эту справку
+	helpText := `Доступные команды:
+/start - Начать работу с ботом
+/help - Показать эту справку
 
-		Если у вас возникли проблемы, свяжитесь с поддержкой.
-	`
-    
-    msg := tgbotapi.NewMessage(chatID, helpText)
-    msg.ReplyMarkup = b.CreateMainMenuKeyboard()
-    b.sendMessage(tgbotapi.NewMessage(chatID, helpText))
+Если у вас возникли проблемы, свяжитесь с поддержкой.`
+	
+	msg := tgbotapi.NewMessage(chatID, helpText)
+	b.sendMessage(msg)
 }
 
 func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text string) {
@@ -85,199 +83,97 @@ func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text str
 }
 
 func (b *Bot) handleServiceSelection(ctx context.Context, chatID int64, text string) {
-    if text != "✅ Оформить заказ" {
-        b.sendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Оформить заказ\" чтобы продолжить")
-        return
-    }
+	if text != "✅ Оформить заказ" {
+		b.sendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Оформить заказ\" чтобы продолжить")
+		return
+	}
 
-    // Show service type options immediately
-    msg := tgbotapi.NewMessage(chatID, "Выберите тип услуги:")
-    msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
-        tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("Печать наклеек"),
-            tgbotapi.NewKeyboardButton("Другая услуга"),
-        ),
-    )
-    b.sendMessage(msg)
-    
-    if err := b.state.SetStep(ctx, chatID, StepServiceType); err != nil {
-        b.logger.Error("Failed to set service type state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
+	msg := tgbotapi.NewMessage(chatID, "Выберите тип услуги:")
+	msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
+	b.sendMessage(msg)
+	
+	if err := b.state.SetStep(ctx, chatID, StepServiceType); err != nil {
+		b.logger.Error("Failed to set service type state",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+	}
 }
 
-// func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string) {
-// 	if err := b.state.SetService(ctx, chatID, text); err != nil {
-// 		b.logger.Error("Failed to set service",
-// 			zap.Int64("chat_id", chatID),
-// 			zap.Error(err))
-// 		b.sendError(chatID, "Ошибка при сохранении услуги")
-// 		return
-// 	}
+func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) {
+	validServices := map[string]bool{
+		"Печать наклеек": true,
+		"Другая услуга":  true,
+	}
+	
+	if !validServices[text] {
+		b.sendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
+		return
+	}
 
-// 	msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
-// 	b.sendMessage(msg)
-// 	if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
-// 		b.logger.Error("Failed to set dimensions state",
-// 			zap.Int64("chat_id", chatID),
-// 			zap.Error(err))
-// 	}
-// }
+	if err := b.state.SetService(ctx, chatID, text); err != nil {
+		b.logger.Error("Failed to set service",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		b.sendError(chatID, "Ошибка при сохранении услуги")
+		return
+	}
 
-func (b *Bot) handleServiceInput(ctx context.Context, chatID int64, text string) {
-    if err := b.state.SetService(ctx, chatID, text); err != nil {
-        b.logger.Error("Failed to set service",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении услуги")
-        return
-    }
-
-    // Show service type selection keyboard
-    msg := tgbotapi.NewMessage(chatID, "Выберите тип услуги:")
-    msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
-    b.sendMessage(msg)
-    
-    if err := b.state.SetStep(ctx, chatID, StepServiceType); err != nil {
-        b.logger.Error("Failed to set service type state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
+	msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
+	b.sendMessage(msg)
+	
+	if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
+		b.logger.Error("Failed to set dimensions state",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+	}
 }
 
 func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text string) {
-    b.logger.Debug("Handling dimensions input", 
-        zap.Int64("chat_id", chatID),
-        zap.String("input", text))
-		
-    parts := strings.Split(text, " ")
-    if len(parts) != 2 {
-        b.sendError(chatID, "Неверный формат. Введите ширину и длину через пробел")
-        return
-    }
+	parts := strings.Split(text, " ")
+	if len(parts) != 2 {
+		b.sendError(chatID, "Неверный формат. Введите ширину и длину через пробел")
+		return
+	}
 
-    width, err := strconv.Atoi(parts[0])
-    if err != nil || width <= 0 || width > 80 {
-        b.sendError(chatID, "Некорректная ширина. Допустимый диапазон: 1-80 см")
-        return
-    }
+	width, err := strconv.Atoi(parts[0])
+	if err != nil || width <= 0 || width > 80 {
+		b.sendError(chatID, "Некорректная ширина. Допустимый диапазон: 1-80 см")
+		return
+	}
 
-    height, err := strconv.Atoi(parts[1])
-    if err != nil || height <= 0 || height > 50 {
-        b.sendError(chatID, "Некорректная длина. Допустимый диапазон: 1-50 см")
-        return
-    }
+	height, err := strconv.Atoi(parts[1])
+	if err != nil || height <= 0 || height > 50 {
+		b.sendError(chatID, "Некорректная длина. Допустимый диапазон: 1-50 см")
+		return
+	}
 
-    if err := b.state.SetDimensions(ctx, chatID, width, height); err != nil {
-        b.logger.Error("Failed to set dimensions",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении размеров")
-        return
-    }
+	if err := b.state.SetDimensions(ctx, chatID, width, height); err != nil {
+		b.logger.Error("Failed to set dimensions",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		b.sendError(chatID, "Ошибка при сохранении размеров")
+		return
+	}
 
-    // After setting dimensions, proceed to date selection
-    msg := tgbotapi.NewMessage(chatID, "Когда вам удобно выполнить заказ?")
-    msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
-    b.sendMessage(msg)
-    
-    if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
-        b.logger.Error("Failed to set date selection state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
-}
-
-func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-    chatID := callback.Message.Chat.ID
-    
-    // Parse texture ID from callback data
-    parts := strings.Split(callback.Data, ":")
-    if len(parts) != 2 {
-        b.sendError(chatID, "Неверный формат выбора текстуры")
-        return
-    }
-    textureID := parts[1]
-
-    // Get dimensions from state
-    width, height, err := b.state.GetDimensions(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get dimensions",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении размеров")
-        return
-    }
-
-    // Get texture price from API
-    texturePrice, err := b.api.GetTexturePrice(ctx, textureID)
-    if err != nil {
-        b.logger.Error("Failed to get texture price",
-            zap.String("texture_id", textureID),
-            zap.Error(err))
-        b.sendError(chatID, "Не удалось получить цену текстуры")
-        return
-    }
-
-    // Calculate total price
-    price := CalculatePrice(width, height, texturePrice)
-
-    // Save texture selection to state
-    if err := b.state.SetTexture(ctx, chatID, textureID, price); err != nil {
-        b.logger.Error("Failed to set texture",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении текстуры")
-        return
-    }
-
-    // Send confirmation message with price
-    msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
-        "Вы выбрали текстуру. Итоговая цена: %.2f руб\n\nКогда вам удобно выполнить заказ?",
-        price,
-    ))
-    msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
-    b.sendMessage(msg)
-
-    // Update user step
-    if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
-        b.logger.Error("Failed to set waiting state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
-
-    // Delete the original message with texture options
-    delMsg := tgbotapi.NewDeleteMessage(chatID, callback.Message.MessageID)
-    if _, err := b.bot.Send(delMsg); err != nil {
-        b.logger.Warn("Failed to delete message",
-            zap.Int("message_id", callback.Message.MessageID),
-            zap.Error(err))
-    }
+	msg := tgbotapi.NewMessage(chatID, "Когда вам удобно выполнить заказ?")
+	msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
+	b.sendMessage(msg)
+	
+	if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
+		b.logger.Error("Failed to set date selection state",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+	}
 }
 
 func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string) {
+	var selectedDate string
+	
 	switch text {
 	case "Сегодня":
-		today := time.Now().Format("02.01.2006")
-		if err := b.state.SetDate(ctx, chatID, today); err != nil {
-			b.logger.Error("Failed to set today as date",
-				zap.Int64("chat_id", chatID),
-				zap.Error(err))
-			b.sendError(chatID, "Ошибка при установке даты")
-			return
-		}
-		b.confirmDateSelection(ctx, chatID, today)
+		selectedDate = time.Now().Format("02.01.2006")
 	case "Завтра":
-		tomorrow := time.Now().Add(24 * time.Hour).Format("02.01.2006")
-		if err := b.state.SetDate(ctx, chatID, tomorrow); err != nil {
-			b.logger.Error("Failed to set tomorrow as date",
-				zap.Int64("chat_id", chatID),
-				zap.Error(err))
-			b.sendError(chatID, "Ошибка при установке даты")
-			return
-		}
-		b.confirmDateSelection(ctx, chatID, tomorrow)
+		selectedDate = time.Now().Add(24 * time.Hour).Format("02.01.2006")
 	case "Выбрать дату вручную":
 		msg := tgbotapi.NewMessage(chatID, "Введите дату вручную в формате ДД.ММ.ГГГГ")
 		b.sendMessage(msg)
@@ -286,9 +182,21 @@ func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string
 				zap.Int64("chat_id", chatID),
 				zap.Error(err))
 		}
+		return
 	default:
 		b.sendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
+		return
 	}
+
+	if err := b.state.SetDate(ctx, chatID, selectedDate); err != nil {
+		b.logger.Error("Failed to set date",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		b.sendError(chatID, "Ошибка при установке даты")
+		return
+	}
+
+	b.confirmDateSelection(ctx, chatID, selectedDate)
 }
 
 func (b *Bot) handleManualDateInput(ctx context.Context, chatID int64, text string) {
@@ -354,35 +262,46 @@ func (b *Bot) handleDateConfirmation(ctx context.Context, chatID int64, text str
 		return
 	}
 
-	msg := tgbotapi.NewMessage(chatID, "Введите ваш номер телефона для связи:")
+	msg := tgbotapi.NewMessage(chatID, "Как вам удобно предоставить контактные данные?")
+	msg.ReplyMarkup = b.CreatePhoneInputKeyboard()
 	b.sendMessage(msg)
-	if err := b.state.SetStep(ctx, chatID, StepPhoneNumber); err != nil {
-		b.logger.Error("Failed to set phone number state",
+	
+	if err := b.state.SetStep(ctx, chatID, StepContactMethod); err != nil {
+		b.logger.Error("Failed to set contact method state",
 			zap.Int64("chat_id", chatID),
 			zap.Error(err))
 	}
 }
 
+func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string) {
+	if text == "Ввести вручную" {
+		msg := tgbotapi.NewMessage(chatID, "Введите ваш номер телефона в формате +79123456789 или 89123456789:")
+		b.sendMessage(msg)
+		
+		if err := b.state.SetStep(ctx, chatID, StepPhoneNumber); err != nil {
+			b.logger.Error("Failed to set phone number state",
+				zap.Int64("chat_id", chatID),
+				zap.Error(err))
+		}
+	}
+}
+
 func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
     
-	msg := tgbotapi.NewMessage(chatID, "Как вам удобно предоставить контактные данные?")
-    msg.ReplyMarkup = b.CreatePhoneInputKeyboard()
-    b.sendMessage(msg)
-    
-    if err := b.state.SetStep(ctx, chatID, StepContactMethod); err != nil {
-        b.logger.Error("Failed to set contact method state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
+	normalized := NormalizePhoneNumber(text)
 	
-	// Validate phone number format
-    if !IsValidPhoneNumber(text) {
-        b.sendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567)")
+	if !IsValidPhoneNumber(normalized) {
+        b.sendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567 или 89123456789)")
         return
     }
 
-    // Get order details from state
-    _, err := b.state.GetFullState(ctx, chatID)
+	b.logger.Debug("Phone number validation",
+    zap.String("input", text),
+    zap.String("normalized", normalized),
+    zap.Bool("is_valid", IsValidPhoneNumber(normalized)))
+
+    // Получаем полное состояние
+    state, err := b.state.GetFullState(ctx, chatID)
     if err != nil {
         b.logger.Error("Failed to get order state",
             zap.Int64("chat_id", chatID),
@@ -391,7 +310,7 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    // Get dimensions
+    // Получаем размеры
     width, height, err := b.state.GetDimensions(ctx, chatID)
     if err != nil {
         b.logger.Error("Failed to get dimensions",
@@ -401,103 +320,75 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    // Get selected texture
-    textureID, err := b.state.GetTextureID(ctx, chatID)
+	textureID := nil
+	textureName := nil
+	order := storage.Order{
+        UserID:       chatID,
+        WidthCM:      width,
+        HeightCM:     height,
+        TextureID:    textureID,
+        TextureName:  textureName,
+        LeatherCost:  priceDetails["leather_cost"],
+        ProcessCost:  priceDetails["processing_cost"],
+        TotalCost:    priceDetails["total_cost"],
+        FinalPrice:   priceDetails["final_price"],
+        Commission:   priceDetails["commission"],
+        Tax:          priceDetails["tax"],
+        NetRevenue:   priceDetails["net_revenue"],
+        Profit:       priceDetails["profit"],
+        Contact:      normalized,
+        Status:       "new",
+        CreatedAt:    time.Now(),
+    }
+
+    // Получаем текстуру (если выбрана)
+    if state.TextureID != "" {
+        texture, err := b.storage.GetTextureByID(ctx, state.TextureID)
+        if err != nil {
+            b.logger.Error("Failed to get texture",
+                zap.String("texture_id", state.TextureID),
+                zap.Error(err))
+            b.sendError(chatID, "Ошибка при получении текстуры")
+            return
+        }
+        textureID = texture.ID
+        textureName = texture.Name
+        } else {
+        // Если текстура не выбрана, используем значения по умолчанию
+        textureID = "11111111-1111-1111-1111-111111111111" // Пример UUID
+        textureName = "Стандартная текстура"
+    }
+
+	priceDetails := CalculatePrice(width, height, NewDefaultPricing())
+	orderID := nil
+	msgText := fmt.Sprintf(
+		"✅ Заказ #%d оформлен!\n%s\n\nКонтакт: %s",
+		orderID,
+		FormatPriceBreakdown(width, height, priceDetails),
+		normalized,
+	)
+	b.sendMessage(tgbotapi.NewMessage(chatID, msgText))
+
+	b.logger.Debug("Phone number validation",
+        zap.String("input", text),
+        zap.String("normalized", normalized),
+        zap.Bool("is_valid", IsValidPhoneNumber(normalized)))
+		
+	// Create and save the order
+    orderID, err := b.createOrder(ctx, chatID, normalized)
     if err != nil {
-        b.logger.Error("Failed to get texture ID from state",
+        b.logger.Error("Failed to create order",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении текстуры")
+        b.sendError(chatID, "Ошибка при оформлении заказа")
         return
     }
 
-    texture, err := b.storage.GetTextureByID(ctx, textureID)
-    if err != nil {
-        b.logger.Error("Failed to get texture",
-            zap.String("texture_id", textureID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении текстуры")
-        return
-    }
-	fmt.Println(texture)
-
-	// texture, err := b.storage.GetTextureByID(ctx, textureID)
-    // if err != nil {
-    //     b.logger.Error("Failed to get texture",
-    //         zap.String("texture_id", textureID),
-    //         zap.Error(err))
-    //     b.sendError(chatID, "Ошибка при получении текстуры")
-    //     return
-    // }
-
-	// Create a simple order without API calls
-    order := storage.Order{
-        UserID:      chatID,
-        WidthCM:     width,
-        HeightCM:    height,
-        TextureID:   "PLACEHOLDER temp-texture", // Temporary value
-        TextureName: "PLACEHOLDER Temporary Texture",
-        PricePerDM2: 10.0, // Temporary price
-        TotalPrice:  float64(width*height) / 100 * 10.0, // Simple calculation
-        Contact:     text,
-        Status:      "new",
-        CreatedAt:   time.Now(),
-    }
-
-    // // Calculate price and create order (WITH API)
-    // price := CalculatePrice(width, height, texture.PricePerDM2)
-    // order := storage.Order{
-    //     UserID:      chatID,
-    //     WidthCM:     width,
-    //     HeightCM:    height,
-    //     TextureID:   texture.ID,
-    //     TextureName: texture.Name,
-    //     PricePerDM2: texture.PricePerDM2,
-    //     TotalPrice:  price,
-    //     Contact:     text,
-    //     Status:      "new",
-    //     CreatedAt:   time.Now(),
-    // }
-
-    // // Save order to database
-    // orderID, err := b.storage.SaveOrder(ctx, order)
-    // if err != nil {
-    //     b.logger.Error("Failed to save order",
-    //         zap.Int64("chat_id", chatID),
-    //         zap.Error(err))
-    //     b.sendError(chatID, "Ошибка при сохранении заказа")
-    //     return
-    // }
-    // order.ID = orderID
-
-	//     // Send confirmation to user // WITH API
-    // b.sendMessage(tgbotapi.NewMessage(chatID,
-    //     "✅ Ваш заказ успешно оформлен!\n\nМы свяжемся с вами в ближайшее время."))
-
-	// Save order to database
-    orderID, err := b.storage.SaveOrder(ctx, order)
-    if err != nil {
-        b.logger.Error("Failed to save order",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении заказа")
-        return
-    }
-
-    b.sendMessage(tgbotapi.NewMessage(chatID,
-        "✅ Ваш заказ успешно оформлен!\nНомер заказа: #" + strconv.FormatInt(orderID, 10)))
-
-    // // Notify admin
-    // adminMsg := FormatOrderNotification(order)
-    // b.sendAdminNotification(ctx, adminMsg)
-
-    // Export to Excel (with error handling)
+	// Экспорт в Excel
     if err := b.storage.ExportOrderToExcel(ctx, order); err != nil {
         b.logger.Error("Failed to export order to Excel",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        // b.sendAdminNotification(ctx, 
-        //     fmt.Sprintf("⚠️ Failed to export order #%d to Excel: %v", order.ID, err))
     }
 
     // Clear user state
@@ -506,105 +397,76 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
             zap.Int64("chat_id", chatID),
             zap.Error(err))
     }
+
+    // Send final confirmation
+    b.sendMessage(tgbotapi.NewMessage(chatID,
+        "✅ Ваш заказ успешно оформлен!\nНомер заказа: #"+strconv.FormatInt(orderID, 10)))
 }
 
-// func (b *Bot) showTextures(ctx context.Context, chatID int64) {
-//     width, height, err := b.state.GetDimensions(ctx, chatID)
-//     if err != nil {
-//         b.logger.Error("Failed to get dimensions",
-//             zap.Int64("chat_id", chatID),
-//             zap.Error(err))
-//         b.sendError(chatID, "Ошибка при получении размеров")
-//         return
-//     }
-
-//     // Validate max dimensions
-//     if width > 80 || height > 50 {
-//         b.sendError(chatID, "Максимальный размер: 80x50 см")
-//         return
-//     }
-
-//     textures, err := b.storage.GetAvailableTextures(ctx)
-//     if err != nil {
-//         b.logger.Error("Failed to get textures",
-//             zap.Int64("chat_id", chatID),
-//             zap.Error(err))
-//         b.sendError(chatID, "Не удалось загрузить варианты текстуры")
-//         return
-//     }
-
-//     var buttons []tgbotapi.InlineKeyboardButton
-//     for _, texture := range textures {
-//         price := CalculatePrice(width, height, texture.PricePerDM2)
-//         btn := tgbotapi.NewInlineKeyboardButtonData(
-//             fmt.Sprintf("%s - %.2f руб (%.2f₽/дм²)", texture.Name, price, texture.PricePerDM2),
-//             fmt.Sprintf("texture:%s", texture.ID),
-//         )
-//         buttons = append(buttons, btn)
-//     }
-
-//     if len(buttons) == 0 {
-//         b.sendError(chatID, "Нет доступных текстур")
-//         return
-//     }
-
-//     // Send texture image if available
-//     if textures[0].ImageURL != "" {
-//         photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(textures[0].ImageURL))
-//         photo.Caption = "Образцы доступных текстур:"
-//         if _, err := b.bot.Send(photo); err != nil {
-//             b.logger.Error("Failed to send photo",
-//                 zap.Int64("chat_id", chatID),
-//                 zap.Error(err))
-//         }
-//     }
-
-//     msg := tgbotapi.NewMessage(chatID, "Выберите текстуру:")
-//     msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-//         tgbotapi.NewInlineKeyboardRow(buttons...),
-//     )
-//     b.sendMessage(msg)
-// }
-
-func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) {
-    // Validate service type
-    validServices := map[string]bool{
-        "Печать наклеек": true,
-        "Другая услуга":  true,
-    }
+func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
+	chatID := callback.Message.Chat.ID
     
-    if !validServices[text] {
-        b.sendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
-        return
-    }
+	// Parse texture ID from callback data
+	parts := strings.Split(callback.Data, ":")
+	if len(parts) != 2 {
+		b.sendError(chatID, "Неверный формат выбора текстуры")
+		return
+	}
+	textureID := parts[1]
 
-    if err := b.state.SetService(ctx, chatID, text); err != nil {
-        b.logger.Error("Failed to set service",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении услуги")
-        return
-    }
+	// Get dimensions from state
+	width, height, err := b.state.GetDimensions(ctx, chatID)
+	if err != nil {
+		b.logger.Error("Failed to get dimensions",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		b.sendError(chatID, "Ошибка при получении размеров")
+		return
+	}
 
-    msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
-    b.sendMessage(msg)
-    
-    if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
-        b.logger.Error("Failed to set dimensions state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
+	// Get texture from storage
+	texture, err := b.storage.GetTextureByID(ctx, textureID)
+	if err != nil {
+		b.logger.Error("Failed to get texture",
+			zap.String("texture_id", textureID),
+			zap.Error(err))
+		b.sendError(chatID, "Не удалось получить информацию о текстуре")
+		return
+	}
+
+	// Calculate price
+	price := CalculatePrice(width, height, texture.PricePerDM2)
+
+	// Save texture selection to state
+	if err := b.state.SetTexture(ctx, chatID, textureID, price); err != nil {
+		b.logger.Error("Failed to set texture",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		b.sendError(chatID, "Ошибка при сохранении текстуры")
+		return
+	}
+
+	// Send confirmation message with price
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
+		"Вы выбрали текстуру: %s\nЦена: %.2f руб\n\nКогда вам удобно выполнить заказ?",
+		texture.Name,
+		price,
+	))
+	msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
+	b.sendMessage(msg)
+
+	// Update user step
+	if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
+		b.logger.Error("Failed to set date selection state",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+	}
+
+	// Delete the original message with texture options
+	delMsg := tgbotapi.NewDeleteMessage(chatID, callback.Message.MessageID)
+	if _, err := b.bot.Send(delMsg); err != nil {
+		b.logger.Warn("Failed to delete message",
+			zap.Int("message_id", callback.Message.MessageID),
+			zap.Error(err))
+	}
 }
-
-func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string) {
-    if text == "Ввести вручную" {
-        msg := tgbotapi.NewMessage(chatID, "Введите ваш номер телефона в формате +79123456789:")
-        b.sendMessage(msg)
-        if err := b.state.SetStep(ctx, chatID, StepPhoneNumber); err != nil {
-            b.logger.Error("Failed to set phone number state",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-        }
-    }
-}
-
