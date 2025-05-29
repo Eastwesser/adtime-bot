@@ -164,21 +164,3 @@ func (b *Bot) sendError(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, "❌ "+text)
 	b.sendMessage(msg)
 }
-
-func (b *Bot) getTexture(ctx context.Context, textureID string) (*storage.Texture, error) {
-    if textureID == "" {
-        // Return default texture if none selected
-        return &storage.Texture{
-            ID:          "11111111-1111-1111-1111-111111111111",
-            Name:       "Стандартная текстура",
-            PricePerDM2: 10.0,
-        }, nil
-    }
-    
-    texture, err := b.storage.GetTextureByID(ctx, textureID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get texture: %w", err)
-    }
-    
-    return texture, nil
-}
