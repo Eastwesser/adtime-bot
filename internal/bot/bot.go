@@ -156,17 +156,25 @@ func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
     chatID := callback.Message.Chat.ID
     
-    switch {
-    case strings.HasPrefix(callback.Data, "texture:"):
+    // Handle texture selection callback
+    if strings.HasPrefix(callback.Data, "texture:") {
         b.handleTextureSelection(ctx, callback)
-    case callback.Data == "cancel":
-        b.handleCancel(ctx, chatID)
-    default:
-        b.logger.Warn("Unknown callback data", 
-            zap.String("data", callback.Data),
-            zap.Int64("chat_id", chatID))
-        b.sendError(chatID, "Неизвестная команда")
+        return
     }
+    
+    // Handle cancel callback
+    if callback.Data == "cancel" {
+        b.handleCancel(ctx, chatID)
+        return
+    }
+    
+    // Handle other callback types here if needed
+    b.logger.Warn("Unknown callback data", 
+        zap.String("data", callback.Data),
+        zap.Int64("chat_id", chatID),
+        zap.Int("message_id", callback.Message.MessageID))
+    
+    b.sendError(chatID, "Неизвестная команда")
 }
 
 func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {
@@ -326,7 +334,6 @@ func (b *Bot) handleStatusUpdate(ctx context.Context, chatID int64, orderIDStr s
         }
     }
 }
-
 
 // handleOrderStats shows statistics about orders
 func (b *Bot) handleOrderStats(ctx context.Context, chatID int64) {
