@@ -37,45 +37,81 @@ func NormalizePhoneNumber(phone string) string {
 }
 
 func IsValidPhoneNumber(phone string) bool {
+    // // Remove all non-digit characters
+    // cleaned := strings.Map(func(r rune) rune {
+    //     if unicode.IsDigit(r) {
+    //         return r
+    //     }
+    //     return -1
+    // }, phone)
+
+    normalized := NormalizePhoneNumber(phone)
     
-    // Remove all non-digit characters for validation
-    cleaned := strings.Map(func(r rune) rune {
-        if unicode.IsDigit(r) {
-            return r
-        }
-        return -1
-    }, phone)
-
-    // Basic length check
-    if len(cleaned) < 10 || len(cleaned) > 15 {
-        return false
+    // Russian numbers
+    if strings.HasPrefix(normalized, "+7") && len(normalized) == 12 {
+        return true
+    }
+    
+    // International numbers
+    if strings.HasPrefix(normalized, "+") && len(normalized) >= 10 {
+        return true
     }
 
-    // Check for obviously fake numbers
-    badNumbers := map[string]bool{
-        "0000000000": true,
-        "1111111111": true,
-        "1234567890": true,
-        "9999999999": true,
-        "0123456789": true,
-    }
+    // // Russian numbers: +7XXXXXXXXXX or 8XXXXXXXXXX
+    // if strings.HasPrefix(cleaned, "7") && len(cleaned) == 11 {
+    //     return true
+    // }
+    // if strings.HasPrefix(cleaned, "8") && len(cleaned) == 11 {
+    //     return true
+    // }
+    // if strings.HasPrefix(phone, "+7") && len(cleaned) == 11 {
+    //     return true
+    // }
 
-    // Check both full number and last 10 digits
-    if badNumbers[cleaned] || (len(cleaned) >= 10 && badNumbers[cleaned[len(cleaned)-10:]]) {
-        return false
-    }
+    // // International numbers
+    // if strings.HasPrefix(phone, "+") && len(cleaned) >= 10 {
+    //     return true
+    // }
 
-    // Validate prefixes
-    validPrefixes := []string{"7", "375", "380", "49", "33", "1"}
-    hasValidPrefix := false
-    for _, prefix := range validPrefixes {
-        if strings.HasPrefix(cleaned, prefix) {
-            hasValidPrefix = true
-            break
-        }
-    }
+    return false
+    // // Remove all non-digit characters for validation
+    // cleaned := strings.Map(func(r rune) rune {
+    //     if unicode.IsDigit(r) {
+    //         return r
+    //     }
+    //     return -1
+    // }, phone)
 
-    return hasValidPrefix
+    // // Basic length check
+    // if len(cleaned) < 10 || len(cleaned) > 15 {
+    //     return false
+    // }
+
+    // // Check for obviously fake numbers
+    // badNumbers := map[string]bool{
+    //     "0000000000": true,
+    //     "1111111111": true,
+    //     "1234567890": true,
+    //     "9999999999": true,
+    //     "0123456789": true,
+    // }
+
+    // // Check both full number and last 10 digits
+    // if badNumbers[cleaned] || (len(cleaned) >= 10 && badNumbers[cleaned[len(cleaned)-10:]]) {
+    //     return false
+    // }
+
+    // // Validate prefixes
+    // validPrefixes := []string{"7", "375", "380", "49", "33", "1"}
+    // hasValidPrefix := false
+    // for _, prefix := range validPrefixes {
+    //     if strings.HasPrefix(cleaned, prefix) {
+    //         hasValidPrefix = true
+    //         break
+    //     }
+    // }
+
+    // return hasValidPrefix
 }
 
 func FormatOrderNotification(order storage.Order) string {
@@ -149,5 +185,16 @@ func FormatPriceBreakdown(width, height int, prices map[string]float64) string {
         prices["tax"],
         prices["net_revenue"],
         prices["profit"],
+    )
+}
+
+func FormatSimplePriceBreakdown(width, height int, finalPrice float64) string {
+    return fmt.Sprintf(
+        `📏 Размер: %d×%d см
+        💰 Итоговая цена: %.2f₽
+
+        Нажмите "Подтвердить" для оформления заказа`,
+        width, height,
+        finalPrice,
     )
 }

@@ -112,12 +112,30 @@ func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
 
 	// Handle contact sharing first
     if message.Contact != nil {
-        step, err := b.state.GetStep(ctx, chatID)
-        if err == nil && step == StepPhoneNumber {
-            b.handlePhoneNumber(ctx, chatID, message.Contact.PhoneNumber)
-            return
-        }
+    // Normalize the phone number first
+    normalized := NormalizePhoneNumber(message.Contact.PhoneNumber)
+    if !IsValidPhoneNumber(normalized) {
+        b.sendError(chatID, "Пожалуйста, предоставьте действительный номер телефона")
+        return
     }
+    
+    // Skip phone number input step and proceed to create order
+    orderID, err := b.createOrder(ctx, chatID, normalized)
+    if err != nil {
+        b.logger.Error("Failed to create order from contact",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.sendError(chatID, "Ошибка при оформлении заказа")
+        return
+    }
+    
+    // Clear state and send confirmation
+    b.state.ClearState(ctx, chatID)
+    msg := tgbotapi.NewMessage(chatID,
+        fmt.Sprintf("✅ Ваш заказ успешно оформлен!\nНомер заказа: #%d\n\nС вами свяжутся в ближайшее время.", orderID))
+		b.sendMessage(msg)
+		return
+	}
     
     if message.IsCommand() {
         // Split command and arguments
@@ -200,40 +218,95 @@ func (b *Bot) ExportOrdersToSingleFile(ctx context.Context) error {
 }
 
 func (b *Bot) notifyAdmin(ctx context.Context, order storage.Order) {
-	text := fmt.Sprintf(
-		"📦 *Новый заказ* #%d\n"+
-			"👤 Пользователь: %d\n"+
-			"📏 Размер: %d×%d см (%.1f дм²)\n"+
-			"🧵 Текстура: %s\n"+
-			"💰 Цена: %.2f ₽\n"+
-			"📞 Контакт: %s\n"+
-			"⏱ Создан: %s",
-		order.ID,
-		order.UserID,
-		order.WidthCM, order.HeightCM,
-		float64(order.WidthCM*order.HeightCM)/100,
-		order.TextureName,
-		order.Price,
-		FormatPhoneNumber(order.Contact),
-		order.CreatedAt.Format("02.01.2006 15:04"),
-	)
+	if b.cfg.Admin.ChatID == 0 {
+        b.logger.Warn("Admin notifications disabled - no chat ID configured")
+        return
+    }
 
-	msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, text)
-	msg.ParseMode = "Markdown"
+	msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, FormatOrderNotification(order))
+	// Add action buttons
+    markup := tgbotapi.NewInlineKeyboardMarkup(
+        tgbotapi.NewInlineKeyboardRow(
+            tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт", fmt.Sprintf("export:%d", order.ID)),
+            tgbotapi.NewInlineKeyboardButtonData("✏️ Статус", fmt.Sprintf("status:%d", order.ID)),
+        ),
+    )
+    msg.ReplyMarkup = markup
 
-	markup := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт в Excel", fmt.Sprintf("export:%d", order.ID)),
-			tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить статус", fmt.Sprintf("status:%d", order.ID)),
-		),
-	)
-	msg.ReplyMarkup = &markup
+    // text := fmt.Sprintf(
+    //     "📦 *Новый заказ* #%d\n"+
+    //         "👤 Пользователь: %d\n"+
+    //         "📏 Размер: %d×%d см (%.1f дм²)\n"+
+    //         "🧵 Текстура: %s\n"+
+    //         "💰 Цена: %.2f ₽\n"+
+    //         "📞 Контакт: %s\n"+
+    //         "⏱ Создан: %s",
+    //     order.ID,
+    //     order.UserID,
+    //     order.WidthCM, order.HeightCM,
+    //     float64(order.WidthCM*order.HeightCM)/100,
+    //     order.TextureName,
+    //     order.Price,
+    //     FormatPhoneNumber(order.Contact),
+    //     order.CreatedAt.Format("02.01.2006 15:04"),
+    // )
 
 	if _, err := b.bot.Send(msg); err != nil {
-		b.logger.Error("Failed to send admin notification",
-			zap.Int64("order_id", order.ID),
-			zap.Error(err))
-	}
+        b.logger.Error("Failed to send admin notification",
+            zap.Int64("order_id", order.ID),
+            zap.Error(err))
+    }
+
+    // msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, text)
+    msg.ParseMode = "Markdown"
+
+    // markup := tgbotapi.NewInlineKeyboardMarkup(
+    //     tgbotapi.NewInlineKeyboardRow(
+    //         tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт в Excel", fmt.Sprintf("export:%d", order.ID)),
+    //         tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить статус", fmt.Sprintf("status:%d", order.ID)),
+    //     ),
+    // )
+    msg.ReplyMarkup = &markup
+
+    // if _, err := b.bot.Send(msg); err != nil {
+    //     b.logger.Error("Failed to send admin notification",
+    //         zap.Int64("order_id", order.ID),
+    //         zap.Error(err))
+    // }
+	// text := fmt.Sprintf(
+	// 	"📦 *Новый заказ* #%d\n"+
+	// 		"👤 Пользователь: %d\n"+
+	// 		"📏 Размер: %d×%d см (%.1f дм²)\n"+
+	// 		"🧵 Текстура: %s\n"+
+	// 		"💰 Цена: %.2f ₽\n"+
+	// 		"📞 Контакт: %s\n"+
+	// 		"⏱ Создан: %s",
+	// 	order.ID,
+	// 	order.UserID,
+	// 	order.WidthCM, order.HeightCM,
+	// 	float64(order.WidthCM*order.HeightCM)/100,
+	// 	order.TextureName,
+	// 	order.Price,
+	// 	FormatPhoneNumber(order.Contact),
+	// 	order.CreatedAt.Format("02.01.2006 15:04"),
+	// )
+
+	// msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, text)
+	// msg.ParseMode = "Markdown"
+
+	// markup := tgbotapi.NewInlineKeyboardMarkup(
+	// 	tgbotapi.NewInlineKeyboardRow(
+	// 		tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт в Excel", fmt.Sprintf("export:%d", order.ID)),
+	// 		tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить статус", fmt.Sprintf("status:%d", order.ID)),
+	// 	),
+	// )
+	// msg.ReplyMarkup = &markup
+
+	// if _, err := b.bot.Send(msg); err != nil {
+	// 	b.logger.Error("Failed to send admin notification",
+	// 		zap.Int64("order_id", order.ID),
+	// 		zap.Error(err))
+	// }
 }
 
 func (b *Bot) isAdmin(chatID int64) bool {
@@ -424,20 +497,20 @@ func (b *Bot) handleExportSingleOrder(ctx context.Context, chatID int64, orderID
 }
 
 func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
+    
 	state, err := b.state.GetFullState(ctx, chatID)
     if err != nil {
-        b.logger.Error("Failed to get order state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
         return 0, fmt.Errorf("failed to get order state: %w", err)
     }
 
 	width, height, err := b.state.GetDimensions(ctx, chatID)
     if err != nil {
-        b.logger.Error("Failed to get dimensions",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
         return 0, fmt.Errorf("failed to get dimensions: %w", err)
+    }
+
+	// Validate dimensions
+    if width <= 0 || height <= 0 {
+        return 0, fmt.Errorf("invalid dimensions: width=%d height=%d", width, height)
     }
 
     // Use the helper function to get texture
@@ -452,24 +525,24 @@ func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int6
 
 	priceDetails := b.calculateOrderPrice(width, height, texture)
 
-	order := storage.Order{
-		UserID:      chatID,
-		WidthCM:     width,
-		HeightCM:    height,
-		TextureID:   texture.ID,
-		TextureName: texture.Name,
-		Price:       priceDetails["final_price"],
-		LeatherCost: priceDetails["leather_cost"],
-		ProcessCost: priceDetails["processing_cost"],
-		TotalCost:   priceDetails["total_cost"],
-		Commission:  priceDetails["commission"],
-		Tax:         priceDetails["tax"],
-		NetRevenue:  priceDetails["net_revenue"],
-		Profit:      priceDetails["profit"],
-		Contact:     phone,
-		Status:      "new",
-		CreatedAt:   time.Now(),
-	}
+    order := storage.Order{
+        UserID:      chatID,
+        WidthCM:     width,
+        HeightCM:    height,
+        TextureID:   texture.ID,
+        TextureName: texture.Name,
+        Price:       priceDetails["final_price"],
+        LeatherCost: priceDetails["leather_cost"],
+        ProcessCost: priceDetails["processing_cost"],
+        TotalCost:   priceDetails["total_cost"],
+        Commission:  priceDetails["commission"],
+        Tax:         priceDetails["tax"],
+        NetRevenue:  priceDetails["net_revenue"],
+        Profit:      priceDetails["profit"],
+        Contact:     phone,
+        Status:      "new",
+        CreatedAt:   time.Now(),
+    }
 
 	orderID, err := b.storage.SaveOrder(ctx, order)
     if err != nil {
@@ -480,9 +553,21 @@ func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int6
         return 0, fmt.Errorf("failed to save order: %w", err)
     }
 
+	// Get username for notification
+    	chat, err := b.bot.GetChat(tgbotapi.ChatInfoConfig{
+		ChatConfig: tgbotapi.ChatConfig{
+			ChatID: chatID,
+		},
+	})
+    username := ""
+    if err == nil && chat.UserName != "" {
+        username = chat.UserName
+    }
+
 	// Send notifications
     b.sendUserConfirmation(ctx, chatID, orderID, phone, width, height, priceDetails)
     go b.notifyAdmin(ctx, order)
+    go b.notifyNewOrderToChannel(ctx, order, username)
 
     return orderID, nil
 }
@@ -524,11 +609,66 @@ func (b *Bot) calculateOrderPrice(width, height int, texture *storage.Texture) m
 }
 
 func (b *Bot) sendUserConfirmation(ctx context.Context, chatID, orderID int64, phone string, width, height int, priceDetails map[string]float64) {
-	msgText := fmt.Sprintf(
-		"✅ Ваш заказ #%d оформлен!\n%s\n\nКонтакт: %s",
-		orderID,
-		FormatPriceBreakdown(width, height, priceDetails),
-		FormatPhoneNumber(phone),
-	)
-	b.sendMessage(tgbotapi.NewMessage(chatID, msgText))
+	// Simple confirmation for user
+    msgText := fmt.Sprintf(
+        "✅ Ваш заказ #%d оформлен!\n"+
+            "Размер: %d×%d см\n"+
+            "Итоговая цена: %.2f ₽\n\n"+
+            "С вами свяжутся в ближайшее время.",
+        orderID,
+        width, height,
+        priceDetails["final_price"],
+    )
+	msg := tgbotapi.NewMessage(chatID, msgText)
+    b.sendMessage(msg)
+}
+
+// func (b *Bot) deleteMessage(chatID int64, messageID int) {
+//     delMsg := tgbotapi.NewDeleteMessage(chatID, messageID)
+//     if _, err := b.bot.Send(delMsg); err != nil {
+//         b.logger.Warn("Failed to delete message",
+//             zap.Int("message_id", messageID),
+//             zap.Error(err))
+//     }
+// }
+
+func (b *Bot) notifyPrivacyAgreement(ctx context.Context, username string) {
+    if b.cfg.Admin.ChannelID == 0 {
+        return
+    }
+
+    text := fmt.Sprintf("🔐 Пользователь @%s подтвердил согласие на обработку персональных данных.", username)
+    msg := tgbotapi.NewMessage(b.cfg.Admin.ChannelID, text)
+    msg.ParseMode = "HTML"
+    
+    if _, err := b.bot.Send(msg); err != nil {
+        b.logger.Error("Failed to send privacy agreement notification to channel",
+            zap.Error(err))
+    }
+}
+
+func (b *Bot) notifyNewOrderToChannel(ctx context.Context, order storage.Order, username string) {
+    if b.cfg.Admin.ChannelID == 0 {
+        return
+    }
+
+    text := fmt.Sprintf(
+        "📦 Новый заказ\n"+
+            "Услуга: %s\n"+
+            "Дата: %s\n"+
+            "Контакт: %s\n"+
+            "Telegram: @%s",
+        order.TextureName,
+        order.CreatedAt.Format("02.01.2006"),
+        FormatPhoneNumber(order.Contact),
+        username,
+    )
+
+    msg := tgbotapi.NewMessage(b.cfg.Admin.ChannelID, text)
+    msg.ParseMode = "HTML"
+    
+    if _, err := b.bot.Send(msg); err != nil {
+        b.logger.Error("Failed to send order notification to channel",
+            zap.Error(err))
+    }
 }

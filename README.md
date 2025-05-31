@@ -106,7 +106,7 @@ make test
 ```
 
 ## DOCKER:
-
+```bash
 # Build containers
 make docker-build
 
@@ -173,7 +173,7 @@ docker-compose exec postgres psql -U postgres -d adtime -c "
 INSERT INTO textures (id, name, price_per_dm2, in_stock) VALUES 
 ('11111111-1111-1111-1111-111111111111', 'Standard Texture', 10.0, true),
 ('22222222-2222-2222-2222-222222222222', 'Premium Texture', 15.5, true);"
-
+```
 ## DEPLOYMENT (MISC)
 
 Build the Docker image:
@@ -197,6 +197,7 @@ TELEGRAM_TOKEN=t make run
 ```
 
 # Start services
+```bash
 docker-compose up -d redis postgres
 
 # Run migrations (choose one)
@@ -205,7 +206,6 @@ make migrate-up
 goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime host=localhost sslmode=disable" up
 
 # Run the bot
-```bash
 TELEGRAM_TOKEN=t DB_USER=postgres DB_PASSWORD=postgres DB_NAME=adtime DB_HOST=localhost REDIS_ADDR=localhost:6379 make run
 
 goose -dir internal/storage/migrations postgres "user=postgres password=postgres dbname=adtime host=localhost sslmode=disable" status
@@ -259,5 +259,9 @@ SELECT * FROM orders WHERE id = 1;
 
 # === RUN MANUALLY ===
 ```bash
-TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_a make docker-build docker-up
+TELEGRAM_TOKEN=token make docker-build docker-up
+
+docker-compose down
+
+docker-compose up -d --build
 ```

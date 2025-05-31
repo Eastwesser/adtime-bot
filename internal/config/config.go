@@ -33,9 +33,10 @@ type Config struct {
 	}
 
 	Admin struct {
-        ChatID int64 `env:"ADMIN_CHAT_ID"`
-        IDs    []int64 `env:"ADMIN_IDS"`
-    }
+		ChatID    int64   `env:"ADMIN_CHAT_ID"`
+		ChannelID int64   `env:"CHANNEL_ID"`
+		IDs       []int64 `env:"ADMIN_IDS"`
+	}
 
 	Pricing struct {
         LeatherPricePerDM2    float64 `env:"LEATHER_PRICE_PER_DM2" envDefault:"25.0"`
@@ -44,6 +45,7 @@ type Config struct {
         SalesTaxRate          float64 `env:"SALES_TAX_RATE" envDefault:"0.06"`
         MarkupMultiplier      float64 `env:"MARKUP_MULTIPLIER" envDefault:"2.5"`
     }
+
 }
 
 func Load() (*Config, error) {
