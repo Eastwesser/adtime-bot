@@ -33,8 +33,8 @@ type Config struct {
 	}
 
 	Admin struct {
-        ChatID int64 `env:"ADMIN_CHAT_ID" envDefault:"-186..."` // Replace with actual default
-        IDs    []int64 `env:"ADMIN_IDS" envSeparator:"," envDefault:"0"`
+        ChatID int64 `env:"ADMIN_CHAT_ID"`
+        IDs    []int64 `env:"ADMIN_IDS"`
     }
 
 	Pricing struct {
