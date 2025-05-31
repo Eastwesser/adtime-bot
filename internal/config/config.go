@@ -33,8 +33,9 @@ type Config struct {
 	}
 
 	Admin struct {
-		IDs []int64 `env:"ADMIN_IDS" envSeparator:"," envDefault:"0"`
-	}
+        ChatID int64 `env:"ADMIN_CHAT_ID" envDefault:"-186..."` // Replace with actual default
+        IDs    []int64 `env:"ADMIN_IDS" envSeparator:"," envDefault:"0"`
+    }
 
 	Pricing struct {
         LeatherPricePerDM2    float64 `env:"LEATHER_PRICE_PER_DM2" envDefault:"25.0"`

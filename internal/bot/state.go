@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"adtime-bot/internal/storage"
 	"adtime-bot/pkg/redis"
 	"context"
 	"encoding/json"
@@ -9,15 +10,15 @@ import (
 )
 
 type UserState struct {
-	Step         string `json:"step"`
-	Service      string `json:"service"`
-	ServiceType  string `json:"service_type"`
-	Date         string `json:"date"`
-	PhoneNumber  string `json:"phone_number"`
-	WidthCM      int    `json:"width_cm"`
-	HeightCM     int    `json:"height_cm"`
-	TextureID    string `json:"texture_id"`
-	Price        string `json:"price"`
+	Step        string `json:"step"`
+	Service     string `json:"service"`
+	ServiceType string `json:"service_type"`
+	Date        string `json:"date"`
+	PhoneNumber string `json:"phone_number"`
+	WidthCM     int    `json:"width_cm"`
+	HeightCM    int    `json:"height_cm"`
+	TextureID   string `json:"texture_id"`
+	Price       string `json:"price"`
 }
 
 type StateStorage struct {
@@ -158,7 +159,31 @@ func (s *StateStorage) SetServiceType(ctx context.Context, chatID int64, service
 }
 
 func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
-    return s.Save(ctx, chatID, UserState{
-        Step: StepPrivacyAgreement,
-    })
+	return s.Save(ctx, chatID, UserState{
+		Step: StepPrivacyAgreement,
+	})
 }
+
+// Add these methods to StateStorage in state.go
+func (s *StateStorage) SaveOrderState(ctx context.Context, chatID int64) error {
+    return s.ResetOrderState(ctx, chatID)
+}
+
+func (s *StateStorage) GetTexture(ctx context.Context, chatID int64) (*storage.Texture, error) {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        return nil, err
+    }
+    if state.TextureID == "" {
+        return nil, fmt.Errorf("no texture selected")
+    }
+    
+    // Return a basic texture with just the ID
+    return &storage.Texture{
+        ID: state.TextureID,
+        // Add other default fields if needed
+        Name:        "Unknown Texture",
+        PricePerDM2: 0.0,
+    }, nil
+}
+

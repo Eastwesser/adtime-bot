@@ -1,21 +1,17 @@
 package bot
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+import (
+	"adtime-bot/internal/storage"
+	"fmt"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
 
 func (b *Bot) CreateMainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("/start"),
 			tgbotapi.NewKeyboardButton("/help"),
-		),
-	)
-}
-
-func (b *Bot) CreateServiceTypeKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	return tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Печать наклеек"),
-			tgbotapi.NewKeyboardButton("Другая услуга"),
 		),
 	)
 }
@@ -86,4 +82,49 @@ func (b *Bot) CreatePhoneInputKeyboard() tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("Ввести вручную"),
 		),
 	)
+}
+
+func (b *Bot) CreateServiceTypeKeyboard() tgbotapi.ReplyKeyboardMarkup {
+    return tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Натуральная кожа"),
+            tgbotapi.NewKeyboardButton("Искусственная кожа"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Замша"),
+            tgbotapi.NewKeyboardButton("Другая текстура"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("❌ Отмена"),
+        ),
+    )
+}
+
+func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture) tgbotapi.InlineKeyboardMarkup {
+    var rows [][]tgbotapi.InlineKeyboardButton
+    const maxButtonsPerRow = 2
+    
+    for i := 0; i < len(textures); i += maxButtonsPerRow {
+        end := i + maxButtonsPerRow
+        if end > len(textures) {
+            end = len(textures)
+        }
+        
+        var row []tgbotapi.InlineKeyboardButton
+        for _, texture := range textures[i:end] {
+            btn := tgbotapi.NewInlineKeyboardButtonData(
+                fmt.Sprintf("%s (%.2f₽/дм²)", texture.Name, texture.PricePerDM2),
+                fmt.Sprintf("texture:%s", texture.ID),
+            )
+            row = append(row, btn)
+        }
+        rows = append(rows, row)
+    }
+    
+    // Add cancel button
+    rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+        tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel"),
+    ))
+    
+    return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
