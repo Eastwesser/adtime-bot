@@ -485,93 +485,76 @@ func (s *PostgresStorage) GetOrderStatistics(ctx context.Context) (*OrderStatist
         StatusCounts: make(map[string]int),
     }
 
-    // Temporary structs for query results
-    type countRevenue struct {
-        Count   int     `db:"count"`
-        Revenue float64 `db:"revenue"`
-    }
-
     // Get total orders and revenue
-    err := s.db.GetContext(ctx, stats, `
+    err := s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as total_orders,
             COALESCE(SUM(price), 0) as total_revenue
         FROM orders
-    `)
+    `).Scan(&stats.TotalOrders, &stats.TotalRevenue)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to get total stats: %w", err)
     }
 
     // Get today's stats
-    var todayStats countRevenue
-    err = s.db.GetContext(ctx, &todayStats, `
+    err = s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as count,
             COALESCE(SUM(price), 0) as revenue
         FROM orders
         WHERE created_at >= CURRENT_DATE
-    `)
+    `).Scan(&stats.TodayOrders, &stats.TodayRevenue)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to get today's stats: %w", err)
     }
-    stats.TodayOrders = todayStats.Count
-    stats.TodayRevenue = todayStats.Revenue
 
     // Get week's stats
-    var weekStats countRevenue
-    err = s.db.GetContext(ctx, &weekStats, `
+    err = s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as count,
             COALESCE(SUM(price), 0) as revenue
         FROM orders
         WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-    `)
+    `).Scan(&stats.WeekOrders, &stats.WeekRevenue)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to get week's stats: %w", err)
     }
-    stats.WeekOrders = weekStats.Count
-    stats.WeekRevenue = weekStats.Revenue
 
     // Get month's stats
-    var monthStats countRevenue
-    err = s.db.GetContext(ctx, &monthStats, `
+    err = s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as count,
             COALESCE(SUM(price), 0) as revenue
         FROM orders
         WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
-    `)
+    `).Scan(&stats.MonthOrders, &stats.MonthRevenue)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to get month's stats: %w", err)
     }
-    stats.MonthOrders = monthStats.Count
-    stats.MonthRevenue = monthStats.Revenue
 
-    // Get status counts
-    rows, err := s.db.QueryContext(
-        ctx, 
-        `SELECT status, COUNT(*) as count
+    // Get status counts - fixed version
+    type statusCount struct {
+        Status string `db:"status"`
+        Count  int    `db:"count"`
+    }
+    
+    var statusCounts []statusCount
+    err = s.db.SelectContext(ctx, &statusCounts, `
+        SELECT status, COUNT(*) as count
         FROM orders
         GROUP BY status
-        `,
-    )
+    `)
     if err != nil {
         return nil, fmt.Errorf("failed to get status counts: %w", err)
     }
-    defer rows.Close()
 
-    for rows.Next() {
-        var status string
-        var count int
-        if err := rows.Scan(&status, &count); err != nil {
-            return nil, fmt.Errorf("failed to scan status count: %w", err)
-        }
-        stats.StatusCounts[status] = count
+    for _, sc := range statusCounts {
+        stats.StatusCounts[sc.Status] = sc.Count
     }
 
     // Cache the result
     if data, err := json.Marshal(stats); err == nil {
-        s.redis.Set(ctx, cacheKey, data, 1*time.Hour) // Cache for 1 hour
+        s.redis.Set(ctx, cacheKey, data, 1*time.Hour)
     }
 
     return stats, nil
