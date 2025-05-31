@@ -105,7 +105,76 @@ To run tests:
 make test
 ```
 
-## Deployment
+## DOCKER:
+
+# Build containers
+make docker-build
+
+# Start services (Postgres + Redis)
+make docker-up
+# or
+docker-compose up -d
+
+# Stop services
+make docker-down
+# or
+docker-compose down
+
+# Clean up Docker resources (remove unused containers, networks, images)
+make docker-prune
+
+## MIGRATIONS
+
+# Apply all migrations
+make migrate-up
+
+# Rollback last migration
+make migrate-down
+
+# Check migration status
+make migrate-status
+
+# Create new migration
+make migrate-create
+# Then enter migration name when prompted
+
+## RUN THE BOT:
+
+# Option 1: Using make dev-run (with default vars)
+# First edit the TELEGRAM_TOKEN in the Makefile
+make dev-run
+
+# Option 2: With custom env vars
+TELEGRAM_TOKEN=your_token_here \
+DB_USER=postgres \
+DB_PASSWORD=postgres \
+DB_NAME=adtime \
+DB_HOST=localhost \
+REDIS_ADDR=localhost:6379 \
+make run
+
+# Option 3: For production (using .env file)
+# Create a .env file with all required variables
+# Then run:
+docker-compose up -d bot
+
+## DB POSTGRES:
+
+# Connect to PostgreSQL
+docker-compose exec postgres psql -U postgres -d adtime
+
+# Common queries:
+\dt                          # List all tables
+SELECT * FROM orders;         # View all orders
+SELECT * FROM textures;       # View textures
+SELECT * FROM orders WHERE user_id = YOUR_USER_ID;
+
+docker-compose exec postgres psql -U postgres -d adtime -c "
+INSERT INTO textures (id, name, price_per_dm2, in_stock) VALUES 
+('11111111-1111-1111-1111-111111111111', 'Standard Texture', 10.0, true),
+('22222222-2222-2222-2222-222222222222', 'Premium Texture', 15.5, true);"
+
+## DEPLOYMENT (MISC)
 
 Build the Docker image:
 ```bash
