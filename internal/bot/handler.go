@@ -1,7 +1,6 @@
 package bot
 
 import (
-	// "adtime-bot/internal/storage"
 	"context"
 	"fmt"
 	"strconv"
@@ -15,10 +14,10 @@ import (
 func (b *Bot) handleStart(ctx context.Context, chatID int64) {
 	text := `Привет! 👋
 
-⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-Используя этого бота, вы соглашаетесь на обработку персональных данных.
+	⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
+	Используя этого бота, вы соглашаетесь на обработку персональных данных.
 
-Если всё ок — нажмите кнопку ниже 👇`
+	Если всё ок — нажмите кнопку ниже 👇`
 
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
@@ -28,17 +27,6 @@ func (b *Bot) handleStart(ctx context.Context, chatID int64) {
 		b.logger.Error("Failed to set privacy agreement state",
 			zap.Int64("chat_id", chatID),
 			zap.Error(err))
-	}
-}
-
-func (b *Bot) handleCommand(ctx context.Context, chatID int64, command string) {
-	switch command {
-	case "start":
-		b.handleStart(ctx, chatID)
-	case "help":
-		b.handleHelp(ctx, chatID)
-	default:
-		b.handleUnknownCommand(ctx, chatID)
 	}
 }
 
@@ -52,10 +40,10 @@ func (b *Bot) handleUnknownCommand(ctx context.Context, chatID int64) {
 
 func (b *Bot) handleHelp(ctx context.Context, chatID int64) {
 	helpText := `Доступные команды:
-/start - Начать работу с ботом
-/help - Показать эту справку
+	/start - Начать работу с ботом
+	/help - Показать эту справку
 
-Если у вас возникли проблемы, свяжитесь с поддержкой.`
+	Если у вас возникли проблемы, свяжитесь с поддержкой.`
 	
 	msg := tgbotapi.NewMessage(chatID, helpText)
 	b.sendMessage(msg)

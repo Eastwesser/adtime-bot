@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,7 +107,43 @@ func (b *Bot) Start(ctx context.Context) error {
 }
 
 func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
-	panic("unimplemented")
+    chatID := message.Chat.ID
+    
+    if message.IsCommand() {
+        // Split command and arguments
+        cmd := message.Command()
+        args := strings.Fields(message.CommandArguments())
+        
+        // First check if it's an admin command
+        if b.isAdmin(chatID) {
+            b.handleAdminCommand(ctx, chatID, cmd, args)
+            return
+        }
+        
+        // Handle regular user commands
+        switch cmd {
+        case "start":
+            b.handleStart(ctx, chatID)
+        case "help":
+            b.handleHelp(ctx, chatID)
+        default:
+            b.handleUnknownCommand(ctx, chatID)
+        }
+        return
+    }
+
+    // Handle regular messages
+    step, err := b.state.GetStep(ctx, chatID)
+    if err != nil {
+        b.logger.Error("Failed to get user step", zap.Error(err))
+        return
+    }
+
+    if handler, ok := b.handlers[step]; ok {
+        handler(ctx, chatID, message.Text)
+    } else {
+        b.handleDefault(ctx, chatID)
+    }
 }
 
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {

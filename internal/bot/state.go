@@ -26,6 +26,14 @@ type StateStorage struct {
 	ttl   time.Duration
 }
 
+func (s *StateStorage) GetStep(ctx context.Context, chatID int64) (string, error) {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        return "", fmt.Errorf("failed to get state: %w", err)
+    }
+    return state.Step, nil
+}
+
 func NewStateStorage(redis *redis.Client) *StateStorage {
 	return &StateStorage{
 		redis: redis,
@@ -166,24 +174,23 @@ func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error 
 
 // Add these methods to StateStorage in state.go
 func (s *StateStorage) SaveOrderState(ctx context.Context, chatID int64) error {
-    return s.ResetOrderState(ctx, chatID)
+	return s.ResetOrderState(ctx, chatID)
 }
 
 func (s *StateStorage) GetTexture(ctx context.Context, chatID int64) (*storage.Texture, error) {
-    state, err := s.Get(ctx, chatID)
-    if err != nil {
-        return nil, err
-    }
-    if state.TextureID == "" {
-        return nil, fmt.Errorf("no texture selected")
-    }
-    
-    // Return a basic texture with just the ID
-    return &storage.Texture{
-        ID: state.TextureID,
-        // Add other default fields if needed
-        Name:        "Unknown Texture",
-        PricePerDM2: 0.0,
-    }, nil
-}
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	if state.TextureID == "" {
+		return nil, fmt.Errorf("no texture selected")
+	}
 
+	// Return a basic texture with just the ID
+	return &storage.Texture{
+		ID: state.TextureID,
+		// Add other default fields if needed
+		Name:        "Unknown Texture",
+		PricePerDM2: 0.0,
+	}, nil
+}
