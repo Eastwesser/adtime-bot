@@ -39,7 +39,7 @@ func main() {
 	defer redisClient.Close()
 
 	// Initialize PostgreSQL storage
-	pgStorage, err := storage.NewPostgresStorage(context.Background(), *cfg, logger)
+	pgStorage, err := storage.NewPostgresStorage(context.Background(), *cfg, redisClient, logger)
 	if err != nil {
 		logger.Fatal("Failed to init PostgreSQL storage", zap.Error(err))
 	}
