@@ -109,6 +109,15 @@ func (b *Bot) Start(ctx context.Context) error {
 
 func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
     chatID := message.Chat.ID
+
+	// Handle contact sharing first
+    if message.Contact != nil {
+        step, err := b.state.GetStep(ctx, chatID)
+        if err == nil && step == StepPhoneNumber {
+            b.handlePhoneNumber(ctx, chatID, message.Contact.PhoneNumber)
+            return
+        }
+    }
     
     if message.IsCommand() {
         // Split command and arguments
@@ -416,19 +425,30 @@ func (b *Bot) handleExportSingleOrder(ctx context.Context, chatID int64, orderID
 
 func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
 	state, err := b.state.GetFullState(ctx, chatID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get order state: %w", err)
-	}
+    if err != nil {
+        b.logger.Error("Failed to get order state",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        return 0, fmt.Errorf("failed to get order state: %w", err)
+    }
 
 	width, height, err := b.state.GetDimensions(ctx, chatID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get dimensions: %w", err)
-	}
+    if err != nil {
+        b.logger.Error("Failed to get dimensions",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        return 0, fmt.Errorf("failed to get dimensions: %w", err)
+    }
 
-	texture, err := b.getOrderTexture(ctx, chatID, state)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get texture: %w", err)
-	}
+    // Use the helper function to get texture
+    texture, err := b.getOrderTexture(ctx, chatID, state)
+    if err != nil {
+        b.logger.Error("Failed to get texture",
+            zap.Int64("chat_id", chatID),
+            zap.Any("state", state),
+            zap.Error(err))
+        return 0, fmt.Errorf("failed to get texture: %w", err)
+    }
 
 	priceDetails := b.calculateOrderPrice(width, height, texture)
 
@@ -452,28 +472,44 @@ func (b *Bot) createOrder(ctx context.Context, chatID int64, phone string) (int6
 	}
 
 	orderID, err := b.storage.SaveOrder(ctx, order)
-	if err != nil {
-		return 0, fmt.Errorf("failed to save order: %w", err)
-	}
-	order.ID = orderID
+    if err != nil {
+        b.logger.Error("Failed to save order",
+            zap.Int64("chat_id", chatID),
+            zap.Any("order", order),
+            zap.Error(err))
+        return 0, fmt.Errorf("failed to save order: %w", err)
+    }
 
 	// Send notifications
-	b.sendUserConfirmation(ctx, chatID, orderID, phone, width, height, priceDetails)
-	go b.notifyAdmin(ctx, order)
+    b.sendUserConfirmation(ctx, chatID, orderID, phone, width, height, priceDetails)
+    go b.notifyAdmin(ctx, order)
 
-	return orderID, nil
+    return orderID, nil
 }
 
 // Helper functions for createOrder
 func (b *Bot) getOrderTexture(ctx context.Context, chatID int64, state UserState) (*storage.Texture, error) {
-	if state.TextureID != "" {
-		return b.storage.GetTextureByID(ctx, state.TextureID)
-	}
-	return &storage.Texture{
-		ID:          "11111111-1111-1111-1111-111111111111",
-		Name:        "Стандартная текстура",
-		PricePerDM2: 10.0,
-	}, nil
+    // If texture ID is set in state, try to get it from storage
+    if state.TextureID != "" {
+        texture, err := b.storage.GetTextureByID(ctx, state.TextureID)
+        if err != nil {
+            b.logger.Warn("Failed to get texture by ID, using default",
+                zap.String("texture_id", state.TextureID),
+                zap.Error(err))
+        } else {
+            return texture, nil
+        }
+    }
+
+    // Fall back to default texture
+    b.logger.Info("Using default texture",
+        zap.Int64("chat_id", chatID))
+        
+    return &storage.Texture{
+        ID:          "11111111-1111-1111-1111-111111111111",
+        Name:        "Стандартная текстура",
+        PricePerDM2: 10.0,
+    }, nil
 }
 
 func (b *Bot) calculateOrderPrice(width, height int, texture *storage.Texture) map[string]float64 {

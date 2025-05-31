@@ -256,3 +256,8 @@ If you want to see the order with ID 1:
 ```sql
 SELECT * FROM orders WHERE id = 1;
 ```
+
+# === RUN MANUALLY ===
+```bash
+TELEGRAM_TOKEN=8079958961:AAH3YtPGeOyZhW8JkCMatxWGivkkMgvlF_a make docker-build docker-up
+```

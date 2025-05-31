@@ -46,7 +46,7 @@ func IsValidPhoneNumber(phone string) bool {
         return -1
     }, phone)
 
-     // Check length (10-15 digits without +)
+    // Basic length check
     if len(cleaned) < 10 || len(cleaned) > 15 {
         return false
     }
@@ -60,35 +60,22 @@ func IsValidPhoneNumber(phone string) bool {
         "0123456789": true,
     }
 
-    if badNumbers[cleaned] {
+    // Check both full number and last 10 digits
+    if badNumbers[cleaned] || (len(cleaned) >= 10 && badNumbers[cleaned[len(cleaned)-10:]]) {
         return false
     }
 
-    // Allow numbers with or without + prefix
-    if !strings.HasPrefix(phone, "+") && !unicode.IsDigit(rune(phone[0])) {
-        return false
+    // Validate prefixes
+    validPrefixes := []string{"7", "375", "380", "49", "33", "1"}
+    hasValidPrefix := false
+    for _, prefix := range validPrefixes {
+        if strings.HasPrefix(cleaned, prefix) {
+            hasValidPrefix = true
+            break
+        }
     }
-    
-    digitsOnly := strings.TrimPrefix(phone, "+")
-    if badNumbers[digitsOnly] {
-        return false
-    }
 
-    // Validate minimum length
-    return len(digitsOnly) >= 10 && len(digitsOnly) <= 15
-
-	// // Validate prefixes and length
-	// validPrefixes := []string{"+7", "+375", "+380", "+49", "+33", "+1"}
-	// hasValidPrefix := false
-	// for _, prefix := range validPrefixes {
-	// 	if strings.HasPrefix(cleaned, prefix) {
-	// 		hasValidPrefix = true
-	// 		break
-	// 	}
-	// }
-
-	// digitCount := len(digitsOnly)
-	// return hasValidPrefix && digitCount >= 10 && digitCount <= 15
+    return hasValidPrefix
 }
 
 func FormatOrderNotification(order storage.Order) string {

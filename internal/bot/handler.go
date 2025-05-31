@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"adtime-bot/internal/storage"
 	"context"
 	"fmt"
 	"strconv"
@@ -88,13 +89,13 @@ func (b *Bot) handleServiceSelection(ctx context.Context, chatID int64, text str
 }
 
 func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) {
-	validServices := map[string]bool{
+    validServices := map[string]bool{
         "Натуральная кожа": true,
         "Искусственная кожа": true,
         "Замша": true,
         "Другая текстура": true,
     }
-	
+
 	if !validServices[text] {
         if text == "❌ Отмена" {
             b.handleCancel(ctx, chatID)
@@ -120,8 +121,21 @@ func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) 
         b.sendError(chatID, "Ошибка при получении текстур")
         return
     }
+    
 	// If user selected "Другая текстура", skip texture selection
     if text == "Другая текстура" {
+        // Set default texture first
+        defaultTexture := &storage.Texture{
+            ID:          "11111111-1111-1111-1111-111111111111",
+            Name:        "Стандартная текстура",
+            PricePerDM2: 10.0,
+        }
+        if err := b.state.SetTexture(ctx, chatID, defaultTexture.ID, 0); err != nil {
+            b.logger.Error("Failed to set default texture",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+        }
+
         msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
         b.sendMessage(msg)
         
@@ -316,6 +330,7 @@ func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string
 }
 
 func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
+
     normalized := NormalizePhoneNumber(text)
     
     if !IsValidPhoneNumber(normalized) {
@@ -333,8 +348,9 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     if err != nil {
         b.logger.Error("Failed to create order",
             zap.Int64("chat_id", chatID),
+            zap.String("phone", normalized),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при оформлении заказа")
+        b.sendError(chatID, "Ошибка при оформлении заказа. Пожалуйста, попробуйте позже.")
         return
     }
 
@@ -346,8 +362,9 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     }
 
     // Send final confirmation
-    b.sendMessage(tgbotapi.NewMessage(chatID,
-        "✅ Ваш заказ успешно оформлен!\nНомер заказа: #"+strconv.FormatInt(orderID, 10)))
+    msg := tgbotapi.NewMessage(chatID,
+        fmt.Sprintf("✅ Ваш заказ успешно оформлен!\nНомер заказа: #%d\n\nС вами свяжутся в ближайшее время.", orderID))
+    b.sendMessage(msg)
 }
 
 func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
