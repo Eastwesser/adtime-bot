@@ -35,6 +35,7 @@ const (
 	StepDateConfirmation = "date_confirmation"
 	StepContactMethod    = "contact_method"
 	StepPhoneNumber      = "phone_number"
+	StepTextureSelection = "texture_selection"
 )
 
 func New(
@@ -139,6 +140,12 @@ func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
         return
     }
 
+    // Special case for texture selection from reply keyboard
+    if step == StepTextureSelection {
+        b.handleTextureSelectionMessage(ctx, chatID, message.Text)
+        return
+    }
+
     if handler, ok := b.handlers[step]; ok {
         handler(ctx, chatID, message.Text)
     } else {
@@ -147,14 +154,16 @@ func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
 }
 
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-	chatID := callback.Message.Chat.ID
-	data := callback.Data
-
-	b.logger.Debug("Processing callback",
-		zap.Int64("chat_id", chatID),
-		zap.String("data", data))
-
-	b.handleTextureSelection(ctx, callback)
+    // Handle texture selection callback
+    if strings.HasPrefix(callback.Data, "texture:") {
+        b.handleTextureSelection(ctx, callback)
+        return
+    }
+    
+    // Handle other callback types here if needed
+    b.logger.Warn("Unknown callback data", 
+        zap.String("data", callback.Data),
+        zap.Int64("chat_id", callback.Message.Chat.ID))
 }
 
 func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {

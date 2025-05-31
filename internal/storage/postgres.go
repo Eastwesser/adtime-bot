@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-
-	// "path/filepath"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -52,6 +50,18 @@ type Order struct {
 	Contact     string    `db:"contact"`
 	Status      string    `db:"status"`
 	CreatedAt   time.Time `db:"created_at"`
+}
+
+type OrderStatistics struct {
+    TotalOrders    int
+    TotalRevenue   float64
+    TodayOrders    int
+    TodayRevenue   float64
+    WeekOrders     int
+    WeekRevenue    float64
+    MonthOrders    int
+    MonthRevenue   float64
+    StatusCounts   map[string]int
 }
 
 type PriceFormula struct {
@@ -458,18 +468,6 @@ func (s *PostgresStorage) GetOrderByID(ctx context.Context, orderID int64) (*Ord
     return &order, nil
 }
 
-type OrderStatistics struct {
-    TotalOrders    int
-    TotalRevenue   float64
-    TodayOrders    int
-    TodayRevenue   float64
-    WeekOrders     int
-    WeekRevenue    float64
-    MonthOrders    int
-    MonthRevenue   float64
-    StatusCounts   map[string]int
-}
-
 func (s *PostgresStorage) GetOrderStatistics(ctx context.Context) (*OrderStatistics, error) {
     cacheKey := "order_stats"
 
@@ -576,4 +574,16 @@ func (s *PostgresStorage) CheckRateLimit(ctx context.Context, userID int64, acti
     }
     
     return count > limit, nil
+}
+
+func (s *PostgresStorage) GetTextureByName(ctx context.Context, name string) (*Texture, error) {
+    const query = `SELECT id::text, name, price_per_dm2 FROM textures WHERE name = $1`
+    
+    var texture Texture
+    err := s.db.GetContext(ctx, &texture, query, name)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get texture: %w", err)
+    }
+    
+    return &texture, nil
 }
