@@ -154,16 +154,19 @@ func (b *Bot) processMessage(ctx context.Context, message *tgbotapi.Message) {
 }
 
 func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-    // Handle texture selection callback
-    if strings.HasPrefix(callback.Data, "texture:") {
-        b.handleTextureSelection(ctx, callback)
-        return
-    }
+    chatID := callback.Message.Chat.ID
     
-    // Handle other callback types here if needed
-    b.logger.Warn("Unknown callback data", 
-        zap.String("data", callback.Data),
-        zap.Int64("chat_id", callback.Message.Chat.ID))
+    switch {
+    case strings.HasPrefix(callback.Data, "texture:"):
+        b.handleTextureSelection(ctx, callback)
+    case callback.Data == "cancel":
+        b.handleCancel(ctx, chatID)
+    default:
+        b.logger.Warn("Unknown callback data", 
+            zap.String("data", callback.Data),
+            zap.Int64("chat_id", chatID))
+        b.sendError(chatID, "Неизвестная команда")
+    }
 }
 
 func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {

@@ -103,7 +103,12 @@ func (b *Bot) CreateServiceTypeKeyboard() tgbotapi.ReplyKeyboardMarkup {
 func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture) tgbotapi.InlineKeyboardMarkup {
     var rows [][]tgbotapi.InlineKeyboardButton
     const maxButtonsPerRow = 2
+
+	if len(textures) == 0 {
+        return tgbotapi.NewInlineKeyboardMarkup() // Return empty keyboard if no textures
+    }
     
+    // Group textures into rows
     for i := 0; i < len(textures); i += maxButtonsPerRow {
         end := i + maxButtonsPerRow
         if end > len(textures) {
@@ -122,9 +127,8 @@ func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture) tgbotap
     }
     
     // Add cancel button
-    rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-        tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel"),
-    ))
+    cancelBtn := tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel")
+    rows = append(rows, []tgbotapi.InlineKeyboardButton{cancelBtn})
     
     return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
