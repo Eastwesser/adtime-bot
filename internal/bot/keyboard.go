@@ -61,7 +61,21 @@ func (b *Bot) CreateDateSelectionKeyboard() tgbotapi.ReplyKeyboardMarkup {
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("Выбрать дату вручную"),
 		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
 	)
+}
+
+func (b *Bot) CreateDimensionsKeyboard() tgbotapi.ReplyKeyboardMarkup {
+    return tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("⬅️ Назад"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Пример: 30 40"),
+        ),
+    )
 }
 
 func (b *Bot) CreateDateConfirmationKeyboard() tgbotapi.ReplyKeyboardMarkup {
@@ -87,12 +101,12 @@ func (b *Bot) CreatePhoneInputKeyboard() tgbotapi.ReplyKeyboardMarkup {
 func (b *Bot) CreateServiceTypeKeyboard() tgbotapi.ReplyKeyboardMarkup {
     return tgbotapi.NewReplyKeyboard(
         tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("Натуральная кожа"),
-            tgbotapi.NewKeyboardButton("Искусственная кожа"),
+            tgbotapi.NewKeyboardButton("🐄 Натуральная кожа"),
+            tgbotapi.NewKeyboardButton("🔄 Искусственная кожа"),
         ),
         tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("Замша"),
-            tgbotapi.NewKeyboardButton("Другая текстура"),
+            tgbotapi.NewKeyboardButton("🧶 Замша"),
+            tgbotapi.NewKeyboardButton("🎨 Другая текстура"),
         ),
         tgbotapi.NewKeyboardButtonRow(
             tgbotapi.NewKeyboardButton("❌ Отмена"),
@@ -132,3 +146,37 @@ func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture) tgbotap
     
     return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
+
+// For future pagination
+// func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture, page int) tgbotapi.InlineKeyboardMarkup {
+//     const itemsPerPage = 6
+//     start := page * itemsPerPage
+//     end := start + itemsPerPage
+    
+//     if end > len(textures) {
+//         end = len(textures)
+//     }
+
+//     // ... create buttons for current page ...
+
+//     // Add navigation buttons
+//     var navButtons []tgbotapi.InlineKeyboardButton
+//     if page > 0 {
+//         navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("⬅️ Пред.", fmt.Sprintf("texture_page:%d", page-1)))
+//     }
+//     if end < len(textures) {
+//         navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("След. ➡️", fmt.Sprintf("texture_page:%d", page+1)))
+//     }
+    
+//     // Add to rows if we have navigation
+//     if len(navButtons) > 0 {
+//         rows = append(rows, navButtons)
+//     }
+    
+//     // Add cancel button
+//     rows = append(rows, []tgbotapi.InlineKeyboardButton{
+//         tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel"),
+//     })
+    
+//     return tgbotapi.NewInlineKeyboardMarkup(rows...)
+// }

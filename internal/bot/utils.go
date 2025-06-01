@@ -37,13 +37,6 @@ func NormalizePhoneNumber(phone string) string {
 }
 
 func IsValidPhoneNumber(phone string) bool {
-    // // Remove all non-digit characters
-    // cleaned := strings.Map(func(r rune) rune {
-    //     if unicode.IsDigit(r) {
-    //         return r
-    //     }
-    //     return -1
-    // }, phone)
 
     normalized := NormalizePhoneNumber(phone)
     
@@ -57,61 +50,20 @@ func IsValidPhoneNumber(phone string) bool {
         return true
     }
 
-    // // Russian numbers: +7XXXXXXXXXX or 8XXXXXXXXXX
-    // if strings.HasPrefix(cleaned, "7") && len(cleaned) == 11 {
-    //     return true
-    // }
-    // if strings.HasPrefix(cleaned, "8") && len(cleaned) == 11 {
-    //     return true
-    // }
-    // if strings.HasPrefix(phone, "+7") && len(cleaned) == 11 {
-    //     return true
-    // }
-
-    // // International numbers
-    // if strings.HasPrefix(phone, "+") && len(cleaned) >= 10 {
-    //     return true
-    // }
-
     return false
-    // // Remove all non-digit characters for validation
-    // cleaned := strings.Map(func(r rune) rune {
-    //     if unicode.IsDigit(r) {
-    //         return r
-    //     }
-    //     return -1
-    // }, phone)
+}
 
-    // // Basic length check
-    // if len(cleaned) < 10 || len(cleaned) > 15 {
-    //     return false
-    // }
-
-    // // Check for obviously fake numbers
-    // badNumbers := map[string]bool{
-    //     "0000000000": true,
-    //     "1111111111": true,
-    //     "1234567890": true,
-    //     "9999999999": true,
-    //     "0123456789": true,
-    // }
-
-    // // Check both full number and last 10 digits
-    // if badNumbers[cleaned] || (len(cleaned) >= 10 && badNumbers[cleaned[len(cleaned)-10:]]) {
-    //     return false
-    // }
-
-    // // Validate prefixes
-    // validPrefixes := []string{"7", "375", "380", "49", "33", "1"}
-    // hasValidPrefix := false
-    // for _, prefix := range validPrefixes {
-    //     if strings.HasPrefix(cleaned, prefix) {
-    //         hasValidPrefix = true
-    //         break
-    //     }
-    // }
-
-    // return hasValidPrefix
+func FormatPhoneNumber(phone string) string {
+    // Format as +7 (XXX) XXX-XX-XX for Russian numbers
+    if strings.HasPrefix(phone, "+7") && len(phone) == 12 {
+        return fmt.Sprintf("%s (%s) %s-%s-%s", 
+            phone[:2],
+            phone[2:5],
+            phone[5:8],
+            phone[8:10],
+            phone[10:12])
+    }
+    return phone
 }
 
 func FormatOrderNotification(order storage.Order) string {
@@ -147,19 +99,6 @@ func FormatOrderNotification(order storage.Order) string {
         order.Status,
         order.CreatedAt.Format("02.01.2006 15:04"),
     )
-}
-
-func FormatPhoneNumber(phone string) string {
-    // Format as +7 (XXX) XXX-XX-XX for Russian numbers
-    if strings.HasPrefix(phone, "+7") && len(phone) == 12 {
-        return fmt.Sprintf("%s (%s) %s-%s-%s", 
-            phone[:2],
-            phone[2:5],
-            phone[5:8],
-            phone[8:10],
-            phone[10:12])
-    }
-    return phone
 }
 
 func FormatPriceBreakdown(width, height int, prices map[string]float64) string {

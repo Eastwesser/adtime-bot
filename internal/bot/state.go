@@ -26,12 +26,12 @@ type StateStorage struct {
 	ttl   time.Duration
 }
 
-func (s *StateStorage) GetStep(ctx context.Context, chatID int64) (string, error) {
-    state, err := s.Get(ctx, chatID)
-    if err != nil {
-        return "", fmt.Errorf("failed to get state: %w", err)
-    }
-    return state.Step, nil
+func (s *StateStorage) SetLastBotMessageID(param any, d int64, param3 int) {
+	panic("unimplemented")
+}
+
+func (s *StateStorage) GetLastBotMessageID(param any, chatID int64) (any, any) {
+	panic("unimplemented")
 }
 
 func NewStateStorage(redis *redis.Client) *StateStorage {
@@ -39,46 +39,6 @@ func NewStateStorage(redis *redis.Client) *StateStorage {
 		redis: redis,
 		ttl:   24 * time.Hour,
 	}
-}
-
-func (s *StateStorage) Save(ctx context.Context, chatID int64, state UserState) error {
-	data, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
-	}
-
-	if err := s.redis.Set(ctx, getStateKey(chatID), data, s.ttl); err != nil {
-		return fmt.Errorf("failed to save state: %w", err)
-	}
-	return nil
-}
-
-func (s *StateStorage) Get(ctx context.Context, chatID int64) (UserState, error) {
-	data, err := s.redis.Get(ctx, getStateKey(chatID))
-	if err != nil {
-		return UserState{}, fmt.Errorf("failed to get state: %w", err)
-	}
-
-	var state UserState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return UserState{}, fmt.Errorf("failed to unmarshal state: %w", err)
-	}
-	return state, nil
-}
-
-func (s *StateStorage) GetFullState(ctx context.Context, chatID int64) (UserState, error) {
-	return s.Get(ctx, chatID)
-}
-
-func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
-	if err := s.redis.Del(ctx, getStateKey(chatID)); err != nil {
-		return fmt.Errorf("failed to clear state: %w", err)
-	}
-	return nil
-}
-
-func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
-	return s.Clear(ctx, chatID)
 }
 
 func (s *StateStorage) SetStep(ctx context.Context, chatID int64, step string) error {
@@ -90,6 +50,25 @@ func (s *StateStorage) SetStep(ctx context.Context, chatID int64, step string) e
 	return s.Save(ctx, chatID, state)
 }
 
+func (s *StateStorage) SetService(ctx context.Context, chatID int64, service string) error {
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		state = UserState{}
+	}
+	state.Service = service
+	return s.Save(ctx, chatID, state)
+}
+
+func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		state = UserState{}
+	}
+	state.TextureID = textureID
+	state.Price = fmt.Sprintf("%.2f", price)
+	return s.Save(ctx, chatID, state)
+}
+
 func (s *StateStorage) SetDimensions(ctx context.Context, chatID int64, width, height int) error {
 	state, err := s.Get(ctx, chatID)
 	if err != nil {
@@ -97,15 +76,6 @@ func (s *StateStorage) SetDimensions(ctx context.Context, chatID int64, width, h
 	}
 	state.WidthCM = width
 	state.HeightCM = height
-	return s.Save(ctx, chatID, state)
-}
-
-func (s *StateStorage) SetService(ctx context.Context, chatID int64, service string) error {
-	state, err := s.Get(ctx, chatID)
-	if err != nil {
-		state = UserState{}
-	}
-	state.Service = service
 	return s.Save(ctx, chatID, state)
 }
 
@@ -127,36 +97,6 @@ func (s *StateStorage) SetPhoneNumber(ctx context.Context, chatID int64, phone s
 	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
-	state, err := s.Get(ctx, chatID)
-	if err != nil {
-		state = UserState{}
-	}
-	state.TextureID = textureID
-	state.Price = fmt.Sprintf("%.2f", price)
-	return s.Save(ctx, chatID, state)
-}
-
-func (s *StateStorage) GetTextureID(ctx context.Context, chatID int64) (string, error) {
-	state, err := s.Get(ctx, chatID)
-	if err != nil {
-		return "", err
-	}
-	return state.TextureID, nil
-}
-
-func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, height int, err error) {
-	state, err := s.Get(ctx, chatID)
-	if err != nil {
-		return 0, 0, err
-	}
-	return state.WidthCM, state.HeightCM, nil
-}
-
-func getStateKey(chatID int64) string {
-	return fmt.Sprintf("state:%d", chatID)
-}
-
 func (s *StateStorage) SetServiceType(ctx context.Context, chatID int64, serviceType string) error {
 	state, err := s.Get(ctx, chatID)
 	if err != nil {
@@ -166,15 +106,33 @@ func (s *StateStorage) SetServiceType(ctx context.Context, chatID int64, service
 	return s.Save(ctx, chatID, state)
 }
 
-func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
-	return s.Save(ctx, chatID, UserState{
-		Step: StepPrivacyAgreement,
-	})
+func getStateKey(chatID int64) string {
+	return fmt.Sprintf("state:%d", chatID)
 }
 
-// Add these methods to StateStorage in state.go
-func (s *StateStorage) SaveOrderState(ctx context.Context, chatID int64) error {
-	return s.ResetOrderState(ctx, chatID)
+func (s *StateStorage) GetFullState(ctx context.Context, chatID int64) (UserState, error) {
+	return s.Get(ctx, chatID)
+}
+
+func (s *StateStorage) GetStep(ctx context.Context, chatID int64) (string, error) {
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get state: %w", err)
+	}
+	return state.Step, nil
+}
+
+func (s *StateStorage) Get(ctx context.Context, chatID int64) (UserState, error) {
+	data, err := s.redis.Get(ctx, getStateKey(chatID))
+	if err != nil {
+		return UserState{}, fmt.Errorf("failed to get state: %w", err)
+	}
+
+	var state UserState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return UserState{}, fmt.Errorf("failed to unmarshal state: %w", err)
+	}
+	return state, nil
 }
 
 func (s *StateStorage) GetTexture(ctx context.Context, chatID int64) (*storage.Texture, error) {
@@ -193,4 +151,53 @@ func (s *StateStorage) GetTexture(ctx context.Context, chatID int64) (*storage.T
 		Name:        "Unknown Texture",
 		PricePerDM2: 0.0,
 	}, nil
+}
+
+func (s *StateStorage) GetTextureID(ctx context.Context, chatID int64) (string, error) {
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		return "", err
+	}
+	return state.TextureID, nil
+}
+
+func (s *StateStorage) GetDimensions(ctx context.Context, chatID int64) (width, height int, err error) {
+	state, err := s.Get(ctx, chatID)
+	if err != nil {
+		return 0, 0, err
+	}
+	return state.WidthCM, state.HeightCM, nil
+}
+
+func (s *StateStorage) Save(ctx context.Context, chatID int64, state UserState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+
+	if err := s.redis.Set(ctx, getStateKey(chatID), data, s.ttl); err != nil {
+		return fmt.Errorf("failed to save state: %w", err)
+	}
+	return nil
+}
+
+func (s *StateStorage) SaveOrderState(ctx context.Context, chatID int64) error {
+	return s.ResetOrderState(ctx, chatID)
+}
+
+func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
+	return s.Save(ctx, chatID, UserState{
+		Step: StepPrivacyAgreement,
+	})
+}
+
+func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
+	if err := s.redis.Del(ctx, getStateKey(chatID)); err != nil {
+		return fmt.Errorf("failed to clear state: %w", err)
+	}
+	return nil
+}
+
+func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
+	return s.Clear(ctx, chatID)
 }
