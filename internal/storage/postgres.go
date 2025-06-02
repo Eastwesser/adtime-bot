@@ -2,10 +2,10 @@ package storage
 
 import (
 	"adtime-bot/internal/config"
+	"adtime-bot/pkg/redis"
 	"context"
 	"database/sql"
 	"encoding/json"
-    "adtime-bot/pkg/redis"
 	"errors"
 	"fmt"
 	"os"
@@ -19,9 +19,13 @@ import (
 )
 
 type PostgresStorage struct {
-    db     *sqlx.DB
-    redis  *redis.Client
-    logger *zap.Logger
+	db     *sqlx.DB
+	redis  *redis.Client
+	logger *zap.Logger
+}
+
+func (s *PostgresStorage) DeleteUserData(ctx context.Context, chatID int64) any {
+	panic("unimplemented")
 }
 
 type Texture struct {
@@ -50,18 +54,19 @@ type Order struct {
 	Contact     string    `db:"contact"`
 	Status      string    `db:"status"`
 	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
 }
 
 type OrderStatistics struct {
-    TotalOrders    int
-    TotalRevenue   float64
-    TodayOrders    int
-    TodayRevenue   float64
-    WeekOrders     int
-    WeekRevenue    float64
-    MonthOrders    int
-    MonthRevenue   float64
-    StatusCounts   map[string]int
+	TotalOrders  int
+	TotalRevenue float64
+	TodayOrders  int
+	TodayRevenue float64
+	WeekOrders   int
+	WeekRevenue  float64
+	MonthOrders  int
+	MonthRevenue float64
+	StatusCounts map[string]int
 }
 
 type PriceFormula struct {
@@ -124,47 +129,47 @@ func NewPostgresStorage(ctx context.Context, cfg config.Config, redisClient *red
 
 	logger.Info("Successfully connected to PostgreSQL")
 	return &PostgresStorage{
-        db:     db,
-        redis:  redisClient,
-        logger: logger,
-    }, nil
+		db:     db,
+		redis:  redisClient,
+		logger: logger,
+	}, nil
 }
 
 func (s *PostgresStorage) GetTextureByID(ctx context.Context, textureID string) (*Texture, error) {
-	
-    cacheKey := fmt.Sprintf("texture:%s", textureID)
 
-    // Try Redis first
-    cached, err := s.redis.Get(ctx, cacheKey)
-    if err == nil {
-        var texture Texture
-        if err := json.Unmarshal(cached, &texture); err == nil {
-            return &texture, nil
-        }
-    }
-    
-    // Fall back to Postgres
-    const query = `
+	cacheKey := fmt.Sprintf("texture:%s", textureID)
+
+	// Try Redis first
+	cached, err := s.redis.Get(ctx, cacheKey)
+	if err == nil {
+		var texture Texture
+		if err := json.Unmarshal(cached, &texture); err == nil {
+			return &texture, nil
+		}
+	}
+
+	// Fall back to Postgres
+	const query = `
         SELECT id::text, name, price_per_dm2, image_url, in_stock 
         FROM textures 
         WHERE id = $1
     `
 
 	var texture Texture
-    err = s.db.GetContext(ctx, &texture, query, textureID)
-    if err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
-            return nil, fmt.Errorf("texture not found: %w", err)
-        }
-        return nil, fmt.Errorf("failed to get texture: %w", err)
-    }
+	err = s.db.GetContext(ctx, &texture, query, textureID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("texture not found: %w", err)
+		}
+		return nil, fmt.Errorf("failed to get texture: %w", err)
+	}
 
-    // Cache the result
-    if data, err := json.Marshal(texture); err == nil {
-        s.redis.Set(ctx, cacheKey, data, 24*time.Hour)
-    }
+	// Cache the result
+	if data, err := json.Marshal(texture); err == nil {
+		s.redis.Set(ctx, cacheKey, data, 24*time.Hour)
+	}
 
-    return &texture, nil
+	return &texture, nil
 }
 
 func (s *PostgresStorage) GetAvailableTextures(ctx context.Context) ([]Texture, error) {
@@ -213,9 +218,9 @@ func (s *PostgresStorage) SaveOrder(ctx context.Context, order Order) (int64, er
 	}
 
 	// Invalidate statistics cache
-    s.redis.Del(ctx, "order_stats")
-    
-    return orderID, nil
+	s.redis.Del(ctx, "order_stats")
+
+	return orderID, nil
 }
 
 func (s *PostgresStorage) ExportOrderToExcel(ctx context.Context, order Order) (string, error) {
@@ -425,9 +430,9 @@ func (s *PostgresStorage) UpdateOrderStatus(ctx context.Context, orderID int64, 
 
 	f.SetActiveSheet(index)
 
-    // const query = `UPDATE orders SET status = $1 WHERE id = $2`
-    // _, err := s.db.ExecContext(ctx, query, status, orderID)
-    // return err
+	// const query = `UPDATE orders SET status = $1 WHERE id = $2`
+	// _, err := s.db.ExecContext(ctx, query, status, orderID)
+	// return err
 
 	// Создаем папку если не существует
 	if err := os.MkdirAll("reports", 0755); err != nil {
@@ -456,134 +461,134 @@ func (s *PostgresStorage) Close() error {
 }
 
 func (s *PostgresStorage) GetOrderByID(ctx context.Context, orderID int64) (*Order, error) {
-    const query = `SELECT * FROM orders WHERE id = $1`
-    var order Order
-    err := s.db.GetContext(ctx, &order, query, orderID)
-    if err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
-            return nil, fmt.Errorf("order not found")
-        }
-        return nil, fmt.Errorf("failed to get order: %w", err)
-    }
-    return &order, nil
+	const query = `SELECT * FROM orders WHERE id = $1`
+	var order Order
+	err := s.db.GetContext(ctx, &order, query, orderID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("order not found")
+		}
+		return nil, fmt.Errorf("failed to get order: %w", err)
+	}
+	return &order, nil
 }
 
 func (s *PostgresStorage) GetOrderStatistics(ctx context.Context) (*OrderStatistics, error) {
-    cacheKey := "order_stats"
+	cacheKey := "order_stats"
 
-    // Try Redis first
-    if cached, err := s.redis.Get(ctx, cacheKey); err == nil {
-        var stats OrderStatistics
-        if err := json.Unmarshal(cached, &stats); err == nil {
-            return &stats, nil
-        }
-    }
-    
-    stats := &OrderStatistics{
-        StatusCounts: make(map[string]int),
-    }
+	// Try Redis first
+	if cached, err := s.redis.Get(ctx, cacheKey); err == nil {
+		var stats OrderStatistics
+		if err := json.Unmarshal(cached, &stats); err == nil {
+			return &stats, nil
+		}
+	}
 
-    // Get total orders and revenue
-    err := s.db.QueryRowContext(ctx, `
+	stats := &OrderStatistics{
+		StatusCounts: make(map[string]int),
+	}
+
+	// Get total orders and revenue
+	err := s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as total_orders,
             COALESCE(SUM(price), 0) as total_revenue
         FROM orders
     `).Scan(&stats.TotalOrders, &stats.TotalRevenue)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get total stats: %w", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total stats: %w", err)
+	}
 
-    // Get today's stats
-    err = s.db.QueryRowContext(ctx, `
+	// Get today's stats
+	err = s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as count,
             COALESCE(SUM(price), 0) as revenue
         FROM orders
         WHERE created_at >= CURRENT_DATE
     `).Scan(&stats.TodayOrders, &stats.TodayRevenue)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get today's stats: %w", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("failed to get today's stats: %w", err)
+	}
 
-    // Get week's stats
-    err = s.db.QueryRowContext(ctx, `
+	// Get week's stats
+	err = s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as count,
             COALESCE(SUM(price), 0) as revenue
         FROM orders
         WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
     `).Scan(&stats.WeekOrders, &stats.WeekRevenue)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get week's stats: %w", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("failed to get week's stats: %w", err)
+	}
 
-    // Get month's stats
-    err = s.db.QueryRowContext(ctx, `
+	// Get month's stats
+	err = s.db.QueryRowContext(ctx, `
         SELECT 
             COUNT(*) as count,
             COALESCE(SUM(price), 0) as revenue
         FROM orders
         WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
     `).Scan(&stats.MonthOrders, &stats.MonthRevenue)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get month's stats: %w", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("failed to get month's stats: %w", err)
+	}
 
-    // Get status counts - fixed version
-    type statusCount struct {
-        Status string `db:"status"`
-        Count  int    `db:"count"`
-    }
-    
-    var statusCounts []statusCount
-    err = s.db.SelectContext(ctx, &statusCounts, `
+	// Get status counts - fixed version
+	type statusCount struct {
+		Status string `db:"status"`
+		Count  int    `db:"count"`
+	}
+
+	var statusCounts []statusCount
+	err = s.db.SelectContext(ctx, &statusCounts, `
         SELECT status, COUNT(*) as count
         FROM orders
         GROUP BY status
     `)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get status counts: %w", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status counts: %w", err)
+	}
 
-    for _, sc := range statusCounts {
-        stats.StatusCounts[sc.Status] = sc.Count
-    }
+	for _, sc := range statusCounts {
+		stats.StatusCounts[sc.Status] = sc.Count
+	}
 
-    // Cache the result
-    if data, err := json.Marshal(stats); err == nil {
-        s.redis.Set(ctx, cacheKey, data, 1*time.Hour)
-    }
+	// Cache the result
+	if data, err := json.Marshal(stats); err == nil {
+		s.redis.Set(ctx, cacheKey, data, 1*time.Hour)
+	}
 
-    return stats, nil
+	return stats, nil
 }
 
 func (s *PostgresStorage) CheckRateLimit(ctx context.Context, userID int64, action string, limit int64, window time.Duration) (bool, error) {
-    key := fmt.Sprintf("ratelimit:%d:%s", userID, action)
-    
-    count, err := s.redis.Incr(ctx, key)
-    if err != nil {
-        return false, fmt.Errorf("failed to increment rate limit counter: %w", err)
-    }
-    
-    // Set expiry if this is the first increment
-    if count == 1 {
-        if _, err := s.redis.Expire(ctx, key, window); err != nil {
-            return false, fmt.Errorf("failed to set rate limit window: %w", err)
-        }
-    }
-    
-    return count > limit, nil
+	key := fmt.Sprintf("ratelimit:%d:%s", userID, action)
+
+	count, err := s.redis.Incr(ctx, key)
+	if err != nil {
+		return false, fmt.Errorf("failed to increment rate limit counter: %w", err)
+	}
+
+	// Set expiry if this is the first increment
+	if count == 1 {
+		if _, err := s.redis.Expire(ctx, key, window); err != nil {
+			return false, fmt.Errorf("failed to set rate limit window: %w", err)
+		}
+	}
+
+	return count > limit, nil
 }
 
 func (s *PostgresStorage) GetTextureByName(ctx context.Context, name string) (*Texture, error) {
-    const query = `SELECT id::text, name, price_per_dm2 FROM textures WHERE name = $1`
-    
-    var texture Texture
-    err := s.db.GetContext(ctx, &texture, query, name)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get texture: %w", err)
-    }
-    
-    return &texture, nil
+	const query = `SELECT id::text, name, price_per_dm2 FROM textures WHERE name = $1`
+
+	var texture Texture
+	err := s.db.GetContext(ctx, &texture, query, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get texture: %w", err)
+	}
+
+	return &texture, nil
 }

@@ -37,19 +37,34 @@ func NormalizePhoneNumber(phone string) string {
 }
 
 func IsValidPhoneNumber(phone string) bool {
-
-    normalized := NormalizePhoneNumber(phone)
+    phone = NormalizePhoneNumber(phone)
     
-    // Russian numbers
-    if strings.HasPrefix(normalized, "+7") && len(normalized) == 12 {
-        return true
+    // Список недопустимых номеров
+    badNumbers := map[string]bool{
+        "0000000000": true,
+        "1111111111": true,
+        "1234567890": true,
     }
     
-    // International numbers
-    if strings.HasPrefix(normalized, "+") && len(normalized) >= 10 {
-        return true
+    if badNumbers[phone] {
+        return false
     }
-
+    
+    // Проверка по префиксам
+    validPrefixes := []string{"+7", "+375", "+380", "+49", "+33", "+1"}
+    for _, prefix := range validPrefixes {
+        if strings.HasPrefix(phone, prefix) {
+            digits := strings.TrimPrefix(phone, "+")
+            digits = strings.Map(func(r rune) rune {
+                if r >= '0' && r <= '9' {
+                    return r
+                }
+                return -1
+            }, digits)
+            return len(digits) >= 10 && len(digits) <= 15
+        }
+    }
+    
     return false
 }
 

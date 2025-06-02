@@ -100,6 +100,10 @@ func (b *Bot) HandleTextureSelectionMessage(ctx context.Context, chatID int64, t
         return
     }
 
+    b.logger.Info("Selected texture",
+        zap.String("name", texture.Name),
+        zap.String("id", texture.ID))
+
     // Get dimensions from state
     width, height, err := b.state.GetDimensions(ctx, chatID)
     if err != nil {

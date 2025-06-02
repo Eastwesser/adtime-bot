@@ -1,20 +1,24 @@
 package bot
 
 import (
-    "context"
-    tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-    "go.uber.org/zap"
+	"context"
+	"fmt"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 func (b *Bot) HandleStart(ctx context.Context, chatID int64) {
-    text := `Привет! 👋
+    msg := tgbotapi.NewMessage(chatID, `Привет! 👋
 
-    ⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-    Используя этого бота, вы соглашаетесь на обработку персональных данных.
+    ⚠️ Прежде чем продолжить, вы должны согласиться с:
+    1. Нашей Политикой конфиденциальности
+    2. Telegram Bot Privacy Policy (TPA)
+    
+    Используя бота, вы подтверждаете согласие на обработку данных в соответствии с этими документами.`)
+    
+    b.ShowPrivacyPolicy(chatID)
 
-    Если всё ок — нажмите кнопку ниже 👇`
-
-    msg := tgbotapi.NewMessage(chatID, text)
     msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
     b.SendMessage(msg)
     
@@ -23,6 +27,34 @@ func (b *Bot) HandleStart(ctx context.Context, chatID int64) {
             zap.Int64("chat_id", chatID),
             zap.Error(err))
     }
+}
+
+func (b *Bot) ShowPrivacyPolicy(chatID int64) {
+    
+    policyText := `🔐 <b>Политика конфиденциальности</b>
+
+    Ваши данные обрабатываются в соответствии с:
+    1. Нашей политикой конфиденциальности
+    2. Telegram Bot Privacy Policy (TPA)
+
+    <u>Мы собираем и храним:</u>
+    - Контактные данные (номер телефона)
+    - Параметры заказа (размеры, текстура)
+    - Даты выполнения заказа
+
+    <u>Telegram TPA требует:</u>
+    - Явного согласия на обработку данных
+    - Возможности удаления данных по запросу
+    - Соблюдения GDPR и других регуляций
+
+    📜 Полный текст: %s`
+
+    msg := tgbotapi.NewMessage(
+        chatID, 
+        fmt.Sprintf(policyText, "https://telegram.org/privacy-tpa"),
+    )
+    msg.ParseMode = "HTML"
+    b.SendMessage(msg)
 }
 
 func (b *Bot) HandleError(ctx context.Context, chatID int64, errorMsg string) {

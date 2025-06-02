@@ -168,7 +168,6 @@ func (s *StateStorage) GetTexture(ctx context.Context, chatID int64) (*storage.T
 	// Return a basic texture with just the ID
 	return &storage.Texture{
 		ID: state.TextureID,
-		// Add other default fields if needed
 		Name:        "Unknown Texture",
 		PricePerDM2: 0.0,
 	}, nil

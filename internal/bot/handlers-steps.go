@@ -201,6 +201,13 @@ func (b *Bot) HandleDimensionsSize(ctx context.Context, chatID int64, text strin
 func (b *Bot) HandleDateSelection(ctx context.Context, chatID int64, text string) {
 	var selectedDate string
 	
+    if text == "Назад" {
+        msg := tgbotapi.NewMessage(chatID, "Введите размеры снова:")
+        msg.ReplyMarkup = b.CreateDimensionsKeyboard()
+        b.SendMessage(msg)
+        return
+    }
+
 	switch text {
 	case "Сегодня":
 		selectedDate = time.Now().Format("02.01.2006")
@@ -376,11 +383,10 @@ func (b *Bot) HandlePhoneNumber(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    // Clear user state
+    // Clear user state but DON'T send another confirmation
     if err := b.state.ClearState(ctx, chatID); err != nil {
         b.logger.Error("Failed to clear user state",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
     }
-    
 }

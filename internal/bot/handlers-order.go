@@ -10,8 +10,12 @@ import (
 	"go.uber.org/zap"
 )
 
-func (b *Bot) CreateOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
-    
+func (b *Bot) CreateOrder(
+    ctx context.Context, 
+    chatID int64, 
+    phone string,
+    ) (int64, error) {
+
 	state, err := b.state.GetFullState(ctx, chatID)
     if err != nil {
         return 0, fmt.Errorf("failed to get order state: %w", err)
@@ -67,26 +71,43 @@ func (b *Bot) CreateOrder(ctx context.Context, chatID int64, phone string) (int6
         return 0, fmt.Errorf("failed to save order: %w", err)
     }
 
+    // After order creation
+    b.logger.Info("Testing admin notification",
+        zap.Int64("admin_chat", b.cfg.Admin.ChatID),
+        zap.Int64s("admin_ids", b.cfg.Admin.IDs))
+
 	// Get username for notification
-    	chat, err := b.bot.GetChat(tgbotapi.ChatInfoConfig{
-		ChatConfig: tgbotapi.ChatConfig{
-			ChatID: chatID,
-		},
-	})
     username := ""
-    if err == nil && chat.UserName != "" {
+    chat, err := b.bot.GetChat(tgbotapi.ChatInfoConfig{
+        ChatConfig: tgbotapi.ChatConfig{
+            ChatID: chatID,
+        },
+    })
+    if err == nil {
         username = chat.UserName
+        if username == "" {
+            username = fmt.Sprintf("id%d", chatID)
+        }
+    } else {
+        username = fmt.Sprintf("id%d", chatID)
     }
 
-	// Send notifications
+	// Send async notifications
     b.SendUserConfirmation(ctx, chatID, orderID, phone, width, height, priceDetails)
-    go b.NotifyAdmin(ctx, order)
-    go b.NotifyNewOrderToChannel(ctx, order, username)
+    
+    go func() {
+        b.NotifyAdmin(ctx, order)
+        b.NotifyNewOrderToChannel(ctx, order, username)
+    }()
 
     return orderID, nil
 }
 
-func (b *Bot) GetOrderTexture(ctx context.Context, chatID int64, state UserState) (*storage.Texture, error) {
+func (b *Bot) GetOrderTexture(
+    ctx context.Context, 
+    chatID int64, 
+    state UserState,
+    ) (*storage.Texture, error) {
     // If texture ID is set in state, try to get it from storage
     if state.TextureID != "" {
         texture, err := b.storage.GetTextureByID(ctx, state.TextureID)
@@ -128,15 +149,15 @@ func (b *Bot) CalculateOrderPrice(
 }
 
 func (b *Bot) SendUserConfirmation(
-	ctx context.Context, 
-	chatID, 
-	orderID int64, 
-	phone string, 
-	width, 
-	height int, 
-	priceDetails map[string]float64,
-	) {
-	// Simple confirmation for user
+    ctx context.Context, 
+    chatID, 
+    orderID int64, 
+    phone string, 
+    width, 
+    height int, 
+    priceDetails map[string]float64,
+) {
+    // This will be the ONLY confirmation message for user
     msgText := fmt.Sprintf(
         "✅ Ваш заказ #%d оформлен!\n"+
             "Размер: %d×%d см\n"+
@@ -146,7 +167,7 @@ func (b *Bot) SendUserConfirmation(
         width, height,
         priceDetails["final_price"],
     )
-	
-	msg := tgbotapi.NewMessage(chatID, msgText)
+    
+    msg := tgbotapi.NewMessage(chatID, msgText)
     b.SendMessage(msg)
 }

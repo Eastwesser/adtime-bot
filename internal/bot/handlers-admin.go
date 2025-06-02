@@ -11,33 +11,33 @@ import (
 )
 
 func (b *Bot) HandleAdminCommand(ctx context.Context, chatID int64, cmd string, args []string) {
-	if !b.IsAdmin(chatID) {
-		return
-	}
+    if !b.IsAdmin(chatID) {
+        return
+    }
 
-	switch cmd {
-	case "export":
-		if len(args) == 0 {
-			b.HandleExportAllOrders(ctx, chatID)
-		} else {
-			orderID, err := strconv.ParseInt(args[0], 10, 64)
-			if err != nil {
-				b.SendError(chatID, "Неверный формат ID заказа")
-				return
-			}
-			b.HandleExportSingleOrder(ctx, chatID, orderID)
-		}
-	case "stats":
-		b.HandleOrderStats(ctx, chatID)
-	case "status":
-		if len(args) < 2 {
-			b.SendError(chatID, "Использование: /status <ID_заказа> <новый_статус>")
-			return
-		}
-		b.HandleStatusUpdate(ctx, chatID, args[0], args[1])
-	default:
-		b.SendError(chatID, "Неизвестная команда администратора")
-	}
+    switch cmd {
+    case "export":
+        if len(args) == 0 {
+            b.exportAllOrders(ctx, chatID)
+        } else {
+            orderID, err := strconv.ParseInt(args[0], 10, 64)
+            if err != nil {
+                b.SendError(chatID, "Неверный формат ID заказа")
+                return
+            }
+            b.exportSingleOrder(ctx, chatID, orderID)
+        }
+    case "stats":
+        b.HandleOrderStats(ctx, chatID)
+    case "status":
+        if len(args) < 2 {
+            b.SendError(chatID, "Использование: /status <ID_заказа> <новый_статус>")
+            return
+        }
+        b.HandleStatusUpdate(ctx, chatID, args[0], args[1])
+    default:
+        b.SendError(chatID, "Неизвестная команда администратора")
+    }
 }
 
 func (b *Bot) HandleStatusUpdate(ctx context.Context, chatID int64, orderIDStr string, newStatus string) {
@@ -186,4 +186,47 @@ func (b *Bot) HandleExportSingleOrder(ctx context.Context, chatID int64, orderID
 		b.logger.Error("Failed to send Excel file", zap.Error(err))
 		b.SendError(chatID, "Failed to send exported file")
 	}
+}
+
+
+func (b *Bot) exportAllOrders(ctx context.Context, chatID int64) {
+    filename := fmt.Sprintf("orders_%s", time.Now().Format("20060102_1504"))
+    if err := b.storage.ExportAllOrdersToExcel(ctx, filename); err != nil {
+        b.logger.Error("Failed to export all orders", zap.Error(err))
+        b.SendError(chatID, "Ошибка при экспорте заказов")
+        return
+    }
+
+    filepath := fmt.Sprintf("reports/%s.xlsx", filename)
+    doc := tgbotapi.NewDocument(chatID, tgbotapi.FilePath(filepath))
+    doc.Caption = "📊 Все заказы"
+
+    if _, err := b.bot.Send(doc); err != nil {
+        b.logger.Error("Failed to send Excel file", zap.Error(err))
+        b.SendError(chatID, "Ошибка при отправке файла")
+    }
+}
+
+func (b *Bot) exportSingleOrder(ctx context.Context, chatID, orderID int64) {
+    order, err := b.storage.GetOrderByID(ctx, orderID)
+    if err != nil {
+        b.logger.Error("Failed to get order", zap.Error(err))
+        b.SendError(chatID, "Заказ не найден")
+        return
+    }
+
+    filepath, err := b.storage.ExportOrderToExcel(ctx, *order)
+    if err != nil {
+        b.logger.Error("Failed to export order", zap.Error(err))
+        b.SendError(chatID, "Ошибка при экспорте заказа")
+        return
+    }
+
+    doc := tgbotapi.NewDocument(chatID, tgbotapi.FilePath(filepath))
+    doc.Caption = fmt.Sprintf("📊 Заказ #%d", orderID)
+
+    if _, err := b.bot.Send(doc); err != nil {
+        b.logger.Error("Failed to send Excel file", zap.Error(err))
+        b.SendError(chatID, "Ошибка при отправке файла")
+    }
 }

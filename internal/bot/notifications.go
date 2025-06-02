@@ -11,12 +11,12 @@ import (
 
 func (b *Bot) NotifyPrivacyAgreement(ctx context.Context, username string) {
     if b.cfg.Admin.ChannelID == 0 {
+        b.logger.Warn("Channel notifications disabled - no channel ID configured")
         return
     }
 
     text := fmt.Sprintf("🔐 Пользователь @%s подтвердил согласие на обработку персональных данных.", username)
     msg := tgbotapi.NewMessage(b.cfg.Admin.ChannelID, text)
-    msg.ParseMode = "HTML"
     
     if _, err := b.bot.Send(msg); err != nil {
         b.logger.Error("Failed to send privacy agreement notification to channel",
@@ -24,17 +24,39 @@ func (b *Bot) NotifyPrivacyAgreement(ctx context.Context, username string) {
     }
 }
 
+// отправляет краткое уведомление в канал
 func (b *Bot) NotifyNewOrderToChannel(ctx context.Context, order storage.Order, username string) {
+    
     if b.cfg.Admin.ChannelID == 0 {
+        b.logger.Warn("Channel notifications disabled - no channel ID configured")
         return
     }
 
+    // Verify bot has proper permissions
+    _, err := b.bot.GetChat(tgbotapi.ChatInfoConfig{
+        ChatConfig: tgbotapi.ChatConfig{
+            ChatID: b.cfg.Admin.ChannelID,
+        },
+    })
+    if err != nil {
+        b.logger.Error("Failed to verify channel access",
+            zap.Int64("channel_id", b.cfg.Admin.ChannelID),
+            zap.Error(err))
+        return
+    }
+
+    // Add debug log to verify channel ID
+    b.logger.Info("Preparing channel notification",
+        zap.Int64("channel_id", b.cfg.Admin.ChannelID),
+        zap.String("username", username))
+
     text := fmt.Sprintf(
-        "📦 Новый заказ\n"+
-            "Услуга: %s\n"+
-            "Дата: %s\n"+
-            "Контакт: %s\n"+
-            "Telegram: @%s",
+        "📦 <b>Новый заказ #%d</b>\n"+
+        "Услуга: %s\n"+
+        "Дата: %s\n"+
+        "Контакт: %s\n"+
+        "Telegram: @%s",
+        order.ID,
         order.TextureName,
         order.CreatedAt.Format("02.01.2006"),
         FormatPhoneNumber(order.Contact),
@@ -42,102 +64,83 @@ func (b *Bot) NotifyNewOrderToChannel(ctx context.Context, order storage.Order, 
     )
 
     msg := tgbotapi.NewMessage(b.cfg.Admin.ChannelID, text)
-    msg.ParseMode = "HTML"
+    msg.ParseMode = "HTML" // Используем HTML вместо Markdown для совместимости
     
     if _, err := b.bot.Send(msg); err != nil {
-        b.logger.Error("Failed to send order notification to channel",
+        b.logger.Error("Failed to send channel notification",
+            zap.Int64("order_id", order.ID),
             zap.Error(err))
     }
 }
 
+// отправляет детали заказа и Excel файл конкретному админу
 func (b *Bot) NotifyAdmin(ctx context.Context, order storage.Order) {
-	if b.cfg.Admin.ChatID == 0 {
-        b.logger.Warn("Admin notifications disabled - no chat ID configured")
+    // Отправляем основное уведомление
+    if b.cfg.Admin.ChatID != 0 {
+        b.sendAdminNotification(ctx, b.cfg.Admin.ChatID, order)
+    }
+    
+    // Отправляем уведомления дополнительным админам
+    for _, adminID := range b.cfg.Admin.IDs {
+        if adminID != 0 {
+            b.sendAdminNotification(ctx, adminID, order)
+        }
+    }
+}
+
+func (b *Bot) sendAdminNotification(ctx context.Context, chatID int64, order storage.Order) {
+    
+    if chatID == 0 {
+        b.logger.Warn("Skipping notification to zero chat ID")
+        return
+    }
+    
+    // Создаем Excel файл
+    filepath, err := b.storage.ExportOrderToExcel(ctx, order)
+    if err != nil {
+        b.logger.Error("Failed to create Excel file for order",
+            zap.Int64("order_id", order.ID),
+            zap.Error(err))
         return
     }
 
-	msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, FormatOrderNotification(order))
-	// Add action buttons
+    // Отправляем сообщение с деталями заказа
+    msg := tgbotapi.NewMessage(chatID, FormatOrderNotification(order))
+    if _, err := b.bot.Send(msg); err != nil {
+        b.logger.Error("Failed to send order notification",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        return
+    }
+    msg.ParseMode = "Markdown"
+    
+    // Добавляем кнопки действий
     markup := tgbotapi.NewInlineKeyboardMarkup(
         tgbotapi.NewInlineKeyboardRow(
-            tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт", fmt.Sprintf("export:%d", order.ID)),
-            tgbotapi.NewInlineKeyboardButtonData("✏️ Статус", fmt.Sprintf("status:%d", order.ID)),
+            tgbotapi.NewInlineKeyboardButtonData("✅ В обработку", fmt.Sprintf("status:%d:processing", order.ID)),
+            tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("status:%d:cancelled", order.ID)),
         ),
     )
     msg.ReplyMarkup = markup
 
-    // text := fmt.Sprintf(
-    //     "📦 *Новый заказ* #%d\n"+
-    //         "👤 Пользователь: %d\n"+
-    //         "📏 Размер: %d×%d см (%.1f дм²)\n"+
-    //         "🧵 Текстура: %s\n"+
-    //         "💰 Цена: %.2f ₽\n"+
-    //         "📞 Контакт: %s\n"+
-    //         "⏱ Создан: %s",
-    //     order.ID,
-    //     order.UserID,
-    //     order.WidthCM, order.HeightCM,
-    //     float64(order.WidthCM*order.HeightCM)/100,
-    //     order.TextureName,
-    //     order.Price,
-    //     FormatPhoneNumber(order.Contact),
-    //     order.CreatedAt.Format("02.01.2006 15:04"),
-    // )
-
-	if _, err := b.bot.Send(msg); err != nil {
+    if _, err := b.bot.Send(msg); err != nil {
         b.logger.Error("Failed to send admin notification",
             zap.Int64("order_id", order.ID),
             zap.Error(err))
     }
 
-    // msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, text)
-    msg.ParseMode = "Markdown"
-
-    // markup := tgbotapi.NewInlineKeyboardMarkup(
-    //     tgbotapi.NewInlineKeyboardRow(
-    //         tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт в Excel", fmt.Sprintf("export:%d", order.ID)),
-    //         tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить статус", fmt.Sprintf("status:%d", order.ID)),
-    //     ),
-    // )
-    msg.ReplyMarkup = &markup
-
-    // if _, err := b.bot.Send(msg); err != nil {
-    //     b.logger.Error("Failed to send admin notification",
-    //         zap.Int64("order_id", order.ID),
-    //         zap.Error(err))
-    // }
-	// text := fmt.Sprintf(
-	// 	"📦 *Новый заказ* #%d\n"+
-	// 		"👤 Пользователь: %d\n"+
-	// 		"📏 Размер: %d×%d см (%.1f дм²)\n"+
-	// 		"🧵 Текстура: %s\n"+
-	// 		"💰 Цена: %.2f ₽\n"+
-	// 		"📞 Контакт: %s\n"+
-	// 		"⏱ Создан: %s",
-	// 	order.ID,
-	// 	order.UserID,
-	// 	order.WidthCM, order.HeightCM,
-	// 	float64(order.WidthCM*order.HeightCM)/100,
-	// 	order.TextureName,
-	// 	order.Price,
-	// 	FormatPhoneNumber(order.Contact),
-	// 	order.CreatedAt.Format("02.01.2006 15:04"),
-	// )
-
-	// msg := tgbotapi.NewMessage(b.cfg.Admin.ChatID, text)
-	// msg.ParseMode = "Markdown"
-
-	// markup := tgbotapi.NewInlineKeyboardMarkup(
-	// 	tgbotapi.NewInlineKeyboardRow(
-	// 		tgbotapi.NewInlineKeyboardButtonData("📊 Экспорт в Excel", fmt.Sprintf("export:%d", order.ID)),
-	// 		tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить статус", fmt.Sprintf("status:%d", order.ID)),
-	// 	),
-	// )
-	// msg.ReplyMarkup = &markup
-
-	// if _, err := b.bot.Send(msg); err != nil {
-	// 	b.logger.Error("Failed to send admin notification",
-	// 		zap.Int64("order_id", order.ID),
-	// 		zap.Error(err))
-	// }
+    // Отправляем Excel файл
+    doc := tgbotapi.NewDocument(chatID, tgbotapi.FilePath(filepath))
+    if _, err := b.bot.Send(doc); err != nil {
+        b.logger.Error("Failed to send order document",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
+    doc.Caption = fmt.Sprintf("📊 Детали заказа #%d", order.ID)
+    
+    if _, err := b.bot.Send(doc); err != nil {
+        b.logger.Error("Failed to send Excel file to admin",
+            zap.Int64("order_id", order.ID),
+            zap.Error(err))
+    }
 }

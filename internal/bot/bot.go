@@ -95,6 +95,7 @@ func (b *Bot) Start(ctx context.Context) error {
 }
 
 func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
+    
     chatID := message.Chat.ID
 
 	// Handle contact sharing first
@@ -115,10 +116,9 @@ func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
             b.SendError(chatID, "Ошибка при оформлении заказа")
             return
         }
-        
-        // Clear state and send confirmation
-        b.state.ClearState(ctx, chatID)
 
+        // Just clear state without sending another message
+        b.state.ClearState(ctx, chatID)
         return
 	}
     
@@ -195,10 +195,14 @@ func (b *Bot) SendError(chatID int64, text string) {
 }
 
 func (b *Bot) IsAdmin(chatID int64) bool {
-	if slices.Contains(b.cfg.Admin.IDs, chatID) {
-			return true
-		}
-	return chatID == b.cfg.Admin.ChatID
+    // Add debug logging
+    b.logger.Debug("Admin check",
+        zap.Int64("chatID", chatID),
+        zap.Int64("configAdminID", b.cfg.Admin.ChatID),
+        zap.Any("adminIDs", b.cfg.Admin.IDs))
+    
+    // Check both the main admin and additional admins
+    return chatID == b.cfg.Admin.ChatID || slices.Contains(b.cfg.Admin.IDs, chatID)
 }
 
 

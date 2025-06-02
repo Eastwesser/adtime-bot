@@ -14,7 +14,7 @@ func NewDefaultPricing() PricingConfig {
         ProcessingCostPerDM2:  31.25, // 1000₽/3200cm² = 0.3125₽/cm² → 31.25₽/dm²
         PaymentCommissionRate: 0.03,
         SalesTaxRate:          0.06,
-        MarkupMultiplier:      2.5, // Empirical from your table
+        MarkupMultiplier:      2.5, // Empirical from our table
     }
 }
 
