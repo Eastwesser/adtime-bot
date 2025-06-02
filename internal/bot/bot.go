@@ -12,6 +12,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.uber.org/zap"
+	"slices"
 )
 
 type Bot struct {
@@ -153,6 +154,12 @@ func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
         return
     }
 
+    // Добавляем обработку кастомной текстуры
+    if step == CustomTextureInput {
+        b.HandleCustomTextureInput(ctx, chatID, message.Text)
+        return
+    }
+
     // Special case for texture selection from reply keyboard
     if step == StepTextureSelection {
         b.HandleTextureSelectionMessage(ctx, chatID, message.Text)
@@ -190,11 +197,9 @@ func (b *Bot) SendError(chatID int64, text string) {
 }
 
 func (b *Bot) IsAdmin(chatID int64) bool {
-	for _, id := range b.cfg.Admin.IDs {
-		if chatID == id {
+	if slices.Contains(b.cfg.Admin.IDs, chatID) {
 			return true
 		}
-	}
 	return chatID == b.cfg.Admin.ChatID
 }
 
@@ -207,13 +212,13 @@ func (b *Bot) ExportOrdersToSingleFile(ctx context.Context) error {
 
 func (b *Bot) SendMessage(msg tgbotapi.MessageConfig) {
     // Delete previous bot message first
-    b.DeletePreviousBotMessage(msg.ChatID)
+    // b.DeletePreviousBotMessage(msg.ChatID) //  if we need to clear all for user
     
     // Send new message
     sentMsg, err := b.bot.Send(msg)
     if err != nil {
         b.logger.Error("Failed to send message",
-            zap.Int64("chat_id", msg.ChatID),
+            zap.Int64("chatID", msg.ChatID),
             zap.String("text", msg.Text),
             zap.Error(err))
         return

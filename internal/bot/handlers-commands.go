@@ -25,6 +25,40 @@ func (b *Bot) HandleStart(ctx context.Context, chatID int64) {
     }
 }
 
+func (b *Bot) HandleError(ctx context.Context, chatID int64, errorMsg string) {
+    step, err := b.state.GetStep(ctx, chatID)
+    if err != nil {
+        step = ""
+    }
+
+    var keyboard tgbotapi.ReplyKeyboardMarkup
+
+    switch step {
+    case StepDimensions:
+        keyboard = b.CreateDimensionsKeyboard()
+    case StepDateSelection:
+        keyboard = b.CreateDateSelectionKeyboard()
+    case StepServiceType:
+        keyboard = b.CreateServiceTypeKeyboard()
+    case StepManualDateInput:
+        keyboard = tgbotapi.NewReplyKeyboard(
+            tgbotapi.NewKeyboardButtonRow(
+                tgbotapi.NewKeyboardButton("Назад"),
+            ),
+        )
+    default:
+        keyboard = tgbotapi.NewReplyKeyboard(
+            tgbotapi.NewKeyboardButtonRow(
+                tgbotapi.NewKeyboardButton("/start"),
+            ),
+        )
+    }
+
+    msg := tgbotapi.NewMessage(chatID, "❌ "+errorMsg)
+    msg.ReplyMarkup = keyboard
+    b.SendMessage(msg)
+}
+
 func (b *Bot) HandleCancel(ctx context.Context, chatID int64) {
     // Get current step to determine where to return
     currentStep, err := b.state.GetStep(ctx, chatID)
@@ -50,6 +84,11 @@ func (b *Bot) HandleCancel(ctx context.Context, chatID int64) {
         msg = tgbotapi.NewMessage(chatID, "❌ Ввод размеров отменен. Выберите тип услуги:")
         keyboard = b.CreateServiceTypeKeyboard()
         b.state.SetStep(ctx, chatID, StepServiceType)
+
+    case CustomTextureInput:
+        msg = tgbotapi.NewMessage(chatID, "❌ Ввод текстуры отменен. Выберите тип услуги:")
+        keyboard = b.CreateServiceTypeKeyboard()
+        b.state.SetStep(ctx, chatID, StepServiceType)    
 
     default:
         // Default cancellation - clear all and return to start

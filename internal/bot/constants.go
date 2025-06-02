@@ -11,4 +11,5 @@ const (
     StepContactMethod    = "contact_method"
     StepPhoneNumber      = "phone_number"
     StepTextureSelection = "texture_selection"
+    CustomTextureInput   = "custom_texture_input"
 )
