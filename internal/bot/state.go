@@ -26,12 +26,33 @@ type StateStorage struct {
 	ttl   time.Duration
 }
 
-func (s *StateStorage) SetLastBotMessageID(param any, d int64, param3 int) {
-	panic("unimplemented")
+func (s *StateStorage) SetLastBotMessageID(ctx context.Context, chatID int64, messageID int) error {
+    // Implementation that returns an error
+    data, err := json.Marshal(messageID)
+    if err != nil {
+        return fmt.Errorf("failed to marshal message ID: %w", err)
+    }
+    
+    key := fmt.Sprintf("last_msg:%d", chatID)
+    if err := s.redis.Set(ctx, key, data, s.ttl); err != nil {
+        return fmt.Errorf("failed to set last message ID: %w", err)
+    }
+    return nil
 }
 
-func (s *StateStorage) GetLastBotMessageID(param any, chatID int64) (any, any) {
-	panic("unimplemented")
+func (s *StateStorage) GetLastBotMessageID(ctx context.Context, chatID int64) (int, error) {
+    key := fmt.Sprintf("last_msg:%d", chatID)
+    data, err := s.redis.Get(ctx, key)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get last message ID: %w", err)
+    }
+    
+    var messageID int
+    if err := json.Unmarshal(data, &messageID); err != nil {
+        return 0, fmt.Errorf("failed to unmarshal message ID: %w", err)
+    }
+    
+    return messageID, nil
 }
 
 func NewStateStorage(redis *redis.Client) *StateStorage {

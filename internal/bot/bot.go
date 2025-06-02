@@ -184,18 +184,6 @@ func (b *Bot) processCallback(ctx context.Context, callback *tgbotapi.CallbackQu
     }
 }
 
-func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {
-	if _, err := b.bot.Send(msg); err != nil {
-		b.logger.Error("Failed to send message",
-			zap.Int64("chat_id", msg.ChatID),
-			zap.String("text", msg.Text),
-			zap.Error(err))
-	}
-}
-
-
-
-
 func (b *Bot) sendError(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, "❌ "+text)
 	b.sendMessage(msg)
@@ -341,11 +329,40 @@ func (b *Bot) sendUserConfirmation(ctx context.Context, chatID, orderID int64, p
     b.sendMessage(msg)
 }
 
-// func (b *Bot) deleteMessage(chatID int64, messageID int) {
-//     delMsg := tgbotapi.NewDeleteMessage(chatID, messageID)
-//     if _, err := b.bot.Send(delMsg); err != nil {
-//         b.logger.Warn("Failed to delete message",
-//             zap.Int("message_id", messageID),
-//             zap.Error(err))
-//     }
-// }
+func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {
+    // Delete previous bot message first
+    b.deletePreviousBotMessage(msg.ChatID)
+    
+    // Send new message
+    sentMsg, err := b.bot.Send(msg)
+    if err != nil {
+        b.logger.Error("Failed to send message",
+            zap.Int64("chat_id", msg.ChatID),
+            zap.String("text", msg.Text),
+            zap.Error(err))
+        return
+    }
+    
+    // Store the new message ID (no error check needed if function doesn't return error)
+    b.state.SetLastBotMessageID(context.Background(), msg.ChatID, sentMsg.MessageID)
+}
+
+func (b *Bot) deletePreviousBotMessage(chatID int64) {
+    msgID, err := b.state.GetLastBotMessageID(context.Background(), chatID)
+    if err != nil {
+        b.logger.Warn("Failed to get last message ID",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        return
+    }
+    
+    if msgID > 0 {
+        delMsg := tgbotapi.NewDeleteMessage(chatID, msgID)
+        if _, err := b.bot.Send(delMsg); err != nil {
+            b.logger.Warn("Failed to delete previous message",
+                zap.Int64("chat_id", chatID),
+                zap.Int("message_id", msgID),
+                zap.Error(err))
+        }
+    }
+}
