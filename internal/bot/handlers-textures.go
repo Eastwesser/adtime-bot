@@ -9,13 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
-func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
+func (b *Bot) HandleTextureSelection(ctx context.Context, callback *tgbotapi.CallbackQuery) {
     chatID := callback.Message.Chat.ID
     
     // Parse texture ID from callback data
     parts := strings.Split(callback.Data, ":")
     if len(parts) != 2 {
-        b.sendError(chatID, "Неверный формат выбора текстуры")
+        b.SendError(chatID, "Неверный формат выбора текстуры")
         return
     }
     textureID := parts[1]
@@ -26,7 +26,7 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
         b.logger.Error("Failed to get dimensions",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении размеров")
+        b.SendError(chatID, "Ошибка при получении размеров")
         return
     }
 
@@ -36,7 +36,7 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
         b.logger.Error("Failed to get texture",
             zap.String("texture_id", textureID),
             zap.Error(err))
-        b.sendError(chatID, "Не удалось получить информацию о текстуре")
+        b.SendError(chatID, "Не удалось получить информацию о текстуре")
         return
     }
 
@@ -57,7 +57,7 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
         b.logger.Error("Failed to set texture",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении текстуры")
+        b.SendError(chatID, "Ошибка при сохранении текстуры")
         return
     }
 
@@ -71,7 +71,7 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
         ),
     )
     msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
-    b.sendMessage(msg)
+    b.SendMessage(msg)
 
     // Update user step
     if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
@@ -89,14 +89,14 @@ func (b *Bot) handleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
     }
 }
 
-func (b *Bot) handleTextureSelectionMessage(ctx context.Context, chatID int64, textureName string) {
+func (b *Bot) HandleTextureSelectionMessage(ctx context.Context, chatID int64, textureName string) {
     // Get texture from storage by name
     texture, err := b.storage.GetTextureByName(ctx, textureName)
     if err != nil {
         b.logger.Error("Failed to get texture by name",
             zap.String("texture_name", textureName),
             zap.Error(err))
-        b.sendError(chatID, "Не удалось найти выбранную текстуру")
+        b.SendError(chatID, "Не удалось найти выбранную текстуру")
         return
     }
 
@@ -106,7 +106,7 @@ func (b *Bot) handleTextureSelectionMessage(ctx context.Context, chatID int64, t
         b.logger.Error("Failed to get dimensions",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении размеров")
+        b.SendError(chatID, "Ошибка при получении размеров")
         return
     }
 
@@ -125,7 +125,7 @@ func (b *Bot) handleTextureSelectionMessage(ctx context.Context, chatID int64, t
         b.logger.Error("Failed to set texture",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении текстуры")
+        b.SendError(chatID, "Ошибка при сохранении текстуры")
         return
     }
 
@@ -139,7 +139,7 @@ func (b *Bot) handleTextureSelectionMessage(ctx context.Context, chatID int64, t
         ),
     )
     msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
-    b.sendMessage(msg)
+    b.SendMessage(msg)
 
     // Update user step
     if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {

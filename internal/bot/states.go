@@ -20,14 +20,14 @@ type UserState struct {
 	TextureID   string `json:"texture_id"`
 	Price       string `json:"price"`
 }
-
+  
 type StateStorage struct {
 	redis *redis.Client
 	ttl   time.Duration
 }
 
 func (s *StateStorage) SetLastBotMessageID(ctx context.Context, chatID int64, messageID int) error {
-    // Implementation that returns an error
+
     data, err := json.Marshal(messageID)
     if err != nil {
         return fmt.Errorf("failed to marshal message ID: %w", err)

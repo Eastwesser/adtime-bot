@@ -10,41 +10,40 @@ import (
 	"go.uber.org/zap"
 )
 
-
-func (b *Bot) handleAdminCommand(ctx context.Context, chatID int64, cmd string, args []string) {
-	if !b.isAdmin(chatID) {
+func (b *Bot) HandleAdminCommand(ctx context.Context, chatID int64, cmd string, args []string) {
+	if !b.IsAdmin(chatID) {
 		return
 	}
 
 	switch cmd {
 	case "export":
 		if len(args) == 0 {
-			b.handleExportAllOrders(ctx, chatID)
+			b.HandleExportAllOrders(ctx, chatID)
 		} else {
 			orderID, err := strconv.ParseInt(args[0], 10, 64)
 			if err != nil {
-				b.sendError(chatID, "Неверный формат ID заказа")
+				b.SendError(chatID, "Неверный формат ID заказа")
 				return
 			}
-			b.handleExportSingleOrder(ctx, chatID, orderID)
+			b.HandleExportSingleOrder(ctx, chatID, orderID)
 		}
 	case "stats":
-		b.handleOrderStats(ctx, chatID)
+		b.HandleOrderStats(ctx, chatID)
 	case "status":
 		if len(args) < 2 {
-			b.sendError(chatID, "Использование: /status <ID_заказа> <новый_статус>")
+			b.SendError(chatID, "Использование: /status <ID_заказа> <новый_статус>")
 			return
 		}
-		b.handleStatusUpdate(ctx, chatID, args[0], args[1])
+		b.HandleStatusUpdate(ctx, chatID, args[0], args[1])
 	default:
-		b.sendError(chatID, "Неизвестная команда администратора")
+		b.SendError(chatID, "Неизвестная команда администратора")
 	}
 }
 
-func (b *Bot) handleStatusUpdate(ctx context.Context, chatID int64, orderIDStr string, newStatus string) {
+func (b *Bot) HandleStatusUpdate(ctx context.Context, chatID int64, orderIDStr string, newStatus string) {
     orderID, err := strconv.ParseInt(orderIDStr, 10, 64)
     if err != nil {
-        b.sendError(chatID, "Неверный формат ID заказа")
+        b.SendError(chatID, "Неверный формат ID заказа")
         return
     }
 
@@ -56,7 +55,7 @@ func (b *Bot) handleStatusUpdate(ctx context.Context, chatID int64, orderIDStr s
         "cancelled":  true,
     }
     if !validStatuses[newStatus] {
-        b.sendError(chatID, "Недопустимый статус. Допустимые значения: new, processing, completed, cancelled")
+        b.SendError(chatID, "Недопустимый статус. Допустимые значения: new, processing, completed, cancelled")
         return
     }
 
@@ -67,12 +66,12 @@ func (b *Bot) handleStatusUpdate(ctx context.Context, chatID int64, orderIDStr s
             zap.Int64("order_id", orderID),
             zap.String("status", newStatus),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при обновлении статуса")
+        b.SendError(chatID, "Ошибка при обновлении статуса")
         return
     }
 
     // Notify admin
-    b.sendMessage(tgbotapi.NewMessage(chatID, fmt.Sprintf(
+    b.SendMessage(tgbotapi.NewMessage(chatID, fmt.Sprintf(
         "✅ Статус заказа #%d изменён на: %s",
         orderID,
         map[string]string{
@@ -104,14 +103,13 @@ func (b *Bot) handleStatusUpdate(ctx context.Context, chatID int64, orderIDStr s
     }
 }
 
-
-// handleOrderStats shows statistics about orders
-func (b *Bot) handleOrderStats(ctx context.Context, chatID int64) {
+// HandleOrderStats shows statistics about orders
+func (b *Bot) HandleOrderStats(ctx context.Context, chatID int64) {
     // Get statistics from storage
     stats, err := b.storage.GetOrderStatistics(ctx)
     if err != nil {
         b.logger.Error("Failed to get order statistics", zap.Error(err))
-        b.sendError(chatID, "Ошибка при получении статистики")
+        b.SendError(chatID, "Ошибка при получении статистики")
         return
     }
 
@@ -141,14 +139,14 @@ func (b *Bot) handleOrderStats(ctx context.Context, chatID int64) {
 
     msg := tgbotapi.NewMessage(chatID, msgText)
     msg.ParseMode = "Markdown"
-    b.sendMessage(msg)
+    b.SendMessage(msg)
 }
 
-func (b *Bot) handleExportAllOrders(ctx context.Context, chatID int64) {
+func (b *Bot) HandleExportAllOrders(ctx context.Context, chatID int64) {
 	filename := fmt.Sprintf("orders_report_%s", time.Now().Format("20060102"))
 	if err := b.storage.ExportAllOrdersToExcel(ctx, filename); err != nil {
 		b.logger.Error("Failed to export all orders", zap.Error(err))
-		b.sendError(chatID, "Failed to export orders")
+		b.SendError(chatID, "Failed to export orders")
 		return
 	}
 
@@ -158,17 +156,17 @@ func (b *Bot) handleExportAllOrders(ctx context.Context, chatID int64) {
 
 	if _, err := b.bot.Send(msg); err != nil {
 		b.logger.Error("Failed to send Excel file", zap.Error(err))
-		b.sendError(chatID, "Failed to send exported file")
+		b.SendError(chatID, "Failed to send exported file")
 	}
 }
 
-func (b *Bot) handleExportSingleOrder(ctx context.Context, chatID int64, orderID int64) {
+func (b *Bot) HandleExportSingleOrder(ctx context.Context, chatID int64, orderID int64) {
 	order, err := b.storage.GetOrderByID(ctx, orderID)
 	if err != nil {
 		b.logger.Error("Failed to get order",
 			zap.Int64("order_id", orderID),
 			zap.Error(err))
-		b.sendError(chatID, "Order not found")
+		b.SendError(chatID, "Order not found")
 		return
 	}
 
@@ -177,7 +175,7 @@ func (b *Bot) handleExportSingleOrder(ctx context.Context, chatID int64, orderID
 		b.logger.Error("Failed to export order",
 			zap.Int64("order_id", orderID),
 			zap.Error(err))
-		b.sendError(chatID, "Failed to export order")
+		b.SendError(chatID, "Failed to export order")
 		return
 	}
 
@@ -186,6 +184,6 @@ func (b *Bot) handleExportSingleOrder(ctx context.Context, chatID int64, orderID
 
 	if _, err := b.bot.Send(msg); err != nil {
 		b.logger.Error("Failed to send Excel file", zap.Error(err))
-		b.sendError(chatID, "Failed to send exported file")
+		b.SendError(chatID, "Failed to send exported file")
 	}
 }

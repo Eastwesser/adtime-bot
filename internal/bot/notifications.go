@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (b *Bot) notifyPrivacyAgreement(ctx context.Context, username string) {
+func (b *Bot) NotifyPrivacyAgreement(ctx context.Context, username string) {
     if b.cfg.Admin.ChannelID == 0 {
         return
     }
@@ -24,7 +24,7 @@ func (b *Bot) notifyPrivacyAgreement(ctx context.Context, username string) {
     }
 }
 
-func (b *Bot) notifyNewOrderToChannel(ctx context.Context, order storage.Order, username string) {
+func (b *Bot) NotifyNewOrderToChannel(ctx context.Context, order storage.Order, username string) {
     if b.cfg.Admin.ChannelID == 0 {
         return
     }
@@ -50,7 +50,7 @@ func (b *Bot) notifyNewOrderToChannel(ctx context.Context, order storage.Order, 
     }
 }
 
-func (b *Bot) notifyAdmin(ctx context.Context, order storage.Order) {
+func (b *Bot) NotifyAdmin(ctx context.Context, order storage.Order) {
 	if b.cfg.Admin.ChatID == 0 {
         b.logger.Warn("Admin notifications disabled - no chat ID configured")
         return

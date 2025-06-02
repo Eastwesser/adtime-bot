@@ -9,95 +9,11 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.uber.org/zap"
-
 )
 
-func (b *Bot) handleStart(ctx context.Context, chatID int64) {
-	text := `Привет! 👋
-
-	⚠️ Прежде чем продолжить, ознакомьтесь с нашей Политикой конфиденциальности.
-	Используя этого бота, вы соглашаетесь на обработку персональных данных.
-
-	Если всё ок — нажмите кнопку ниже 👇`
-
-	msg := tgbotapi.NewMessage(chatID, text)
-	msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
-	b.sendMessage(msg)
-	
-	if err := b.state.SetStep(ctx, chatID, StepPrivacyAgreement); err != nil {
-		b.logger.Error("Failed to set privacy agreement state",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-	}
-}
-
-func (b *Bot) handleCancel(ctx context.Context, chatID int64) {
-    // Get current step to determine where to return
-    currentStep, err := b.state.GetStep(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get current step",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        currentStep = "" // Default to start if cannot get step
-    }
-
-    var msg tgbotapi.MessageConfig
-    var keyboard any
-
-    switch currentStep {
-    case StepDateSelection, StepManualDateInput, StepDateConfirmation:
-        // Return to dimensions input
-        msg = tgbotapi.NewMessage(chatID, "❌ Выбор даты отменен. Введите размеры снова:")
-        keyboard = b.CreateDimensionsKeyboard()
-        b.state.SetStep(ctx, chatID, StepDimensions)
-
-    case StepDimensions:
-        // Return to service type selection
-        msg = tgbotapi.NewMessage(chatID, "❌ Ввод размеров отменен. Выберите тип услуги:")
-        keyboard = b.CreateServiceTypeKeyboard()
-        b.state.SetStep(ctx, chatID, StepServiceType)
-
-    default:
-        // Default cancellation - clear all and return to start
-        if err := b.state.ClearState(ctx, chatID); err != nil {
-            b.logger.Error("Failed to clear state on cancel",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-        }
-        msg = tgbotapi.NewMessage(chatID, "❌ Действие отменено. Начните заново:")
-        keyboard = tgbotapi.NewReplyKeyboard(
-            tgbotapi.NewKeyboardButtonRow(
-                tgbotapi.NewKeyboardButton("/start"),
-            ),
-        )
-    }
-
-    msg.ReplyMarkup = keyboard
-    b.sendMessage(msg)
-}
-
-func (b *Bot) handleDefault(ctx context.Context, chatID int64) {
-	b.sendError(chatID, "Я не понимаю эту команду. Пожалуйста, используйте меню.")
-}
-
-func (b *Bot) handleUnknownCommand(ctx context.Context, chatID int64) {
-	b.sendError(chatID, "Неизвестная команда. Пожалуйста, используйте /start для начала работы.")
-}
-
-func (b *Bot) handleHelp(ctx context.Context, chatID int64) {
-	helpText := `Доступные команды:
-	/start - Начать работу с ботом
-	/help - Показать эту справку
-
-	Если у вас возникли проблемы, свяжитесь с поддержкой.`
-	
-	msg := tgbotapi.NewMessage(chatID, helpText)
-	b.sendMessage(msg)
-}
-
-func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandlePrivacyAgreement(ctx context.Context, chatID int64, text string) {
 	if text != "✅ Продолжить" {
-        b.sendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Продолжить\" чтобы согласиться с условиями")
+        b.SendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Продолжить\" чтобы согласиться с условиями")
         return
     }
 
@@ -111,7 +27,7 @@ func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text str
     if err == nil && chat.UserName != "" {
         username = chat.UserName
         // Send notification to channel
-        b.notifyPrivacyAgreement(ctx, username)
+        b.NotifyPrivacyAgreement(ctx, username)
     }
 
 	msg := tgbotapi.NewMessage(chatID, "Спасибо за согласие! Теперь вы можете оформить заказ.")
@@ -121,7 +37,7 @@ func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text str
         ),
     )
 
-	b.sendMessage(msg)
+	b.SendMessage(msg)
     if err := b.state.SetStep(ctx, chatID, StepServiceSelection); err != nil {
         b.logger.Error("Failed to set service selection state",
             zap.Int64("chat_id", chatID),
@@ -129,15 +45,15 @@ func (b *Bot) handlePrivacyAgreement(ctx context.Context, chatID int64, text str
     }
 }
 
-func (b *Bot) handleServiceSelection(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleServiceSelection(ctx context.Context, chatID int64, text string) {
 	if text != "✅ Оформить заказ" {
-		b.sendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Оформить заказ\" чтобы продолжить")
+		b.SendError(chatID, "Пожалуйста, нажмите кнопку \"✅ Оформить заказ\" чтобы продолжить")
 		return
 	}
 
 	msg := tgbotapi.NewMessage(chatID, "Выберите тип услуги:")
 	msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
-	b.sendMessage(msg)
+	b.SendMessage(msg)
 	
 	if err := b.state.SetStep(ctx, chatID, StepServiceType); err != nil {
 		b.logger.Error("Failed to set service type state",
@@ -146,7 +62,7 @@ func (b *Bot) handleServiceSelection(ctx context.Context, chatID int64, text str
 	}
 }
 
-func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) {
     
     validServices := map[string]bool{
         "Натуральная кожа": true,
@@ -157,10 +73,10 @@ func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) 
 
 	if !validServices[text] {
         if text == "❌ Отмена" {
-            b.handleCancel(ctx, chatID)
+            b.HandleCancel(ctx, chatID)
             return
         }
-        b.sendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
+        b.SendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
         return
     }
 
@@ -168,7 +84,7 @@ func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) 
         b.logger.Error("Failed to set service",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при сохранении услуги")
+        b.SendError(chatID, "Ошибка при сохранении услуги")
         return
     }
 
@@ -206,7 +122,7 @@ func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) 
     // }
     // Always ask for dimensions first, regardless of service type
     msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
-    b.sendMessage(msg)
+    b.SendMessage(msg)
     
     if err := b.state.SetStep(ctx, chatID, StepDimensions); err != nil {
         b.logger.Error("Failed to set dimensions state",
@@ -215,22 +131,22 @@ func (b *Bot) handleServiceType(ctx context.Context, chatID int64, text string) 
     }
 }
 
-func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleDimensionsSize(ctx context.Context, chatID int64, text string) {
 	parts := strings.Split(text, " ")
 	if len(parts) != 2 {
-		b.sendError(chatID, "Неверный формат. Введите ширину и длину через пробел")
+		b.SendError(chatID, "Неверный формат. Введите ширину и длину через пробел")
 		return
 	}
 
 	width, err := strconv.Atoi(parts[0])
 	if err != nil || width <= 0 || width > 80 {
-		b.sendError(chatID, "Некорректная ширина. Допустимый диапазон: 1-80 см")
+		b.SendError(chatID, "Некорректная ширина. Допустимый диапазон: 1-80 см")
 		return
 	}
 
 	height, err := strconv.Atoi(parts[1])
 	if err != nil || height <= 0 || height > 50 {
-		b.sendError(chatID, "Некорректная длина. Допустимый диапазон: 1-50 см")
+		b.SendError(chatID, "Некорректная длина. Допустимый диапазон: 1-50 см")
 		return
 	}
 
@@ -238,13 +154,13 @@ func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text strin
 		b.logger.Error("Failed to set dimensions",
 			zap.Int64("chat_id", chatID),
 			zap.Error(err))
-		b.sendError(chatID, "Ошибка при сохранении размеров")
+		b.SendError(chatID, "Ошибка при сохранении размеров")
 		return
 	}
 
 	msg := tgbotapi.NewMessage(chatID, "Когда вам удобно выполнить заказ?")
 	msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
-	b.sendMessage(msg)
+	b.SendMessage(msg)
 	
 	if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
 		b.logger.Error("Failed to set date selection state",
@@ -253,7 +169,7 @@ func (b *Bot) handleDimensionsSize(ctx context.Context, chatID int64, text strin
 	}
 }
 
-func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleDateSelection(ctx context.Context, chatID int64, text string) {
 	var selectedDate string
 	
 	switch text {
@@ -263,7 +179,7 @@ func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string
 		selectedDate = time.Now().Add(24 * time.Hour).Format("02.01.2006")
 	case "Выбрать дату вручную":
 		msg := tgbotapi.NewMessage(chatID, "Введите дату вручную в формате ДД.ММ.ГГГГ")
-		b.sendMessage(msg)
+		b.SendMessage(msg)
 		if err := b.state.SetStep(ctx, chatID, StepManualDateInput); err != nil {
 			b.logger.Error("Failed to set manual date input state",
 				zap.Int64("chat_id", chatID),
@@ -271,7 +187,7 @@ func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string
 		}
 		return
 	default:
-		b.sendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
+		b.SendError(chatID, "Пожалуйста, выберите один из предложенных вариантов")
 		return
 	}
 
@@ -279,14 +195,14 @@ func (b *Bot) handleDateSelection(ctx context.Context, chatID int64, text string
 		b.logger.Error("Failed to set date",
 			zap.Int64("chat_id", chatID),
 			zap.Error(err))
-		b.sendError(chatID, "Ошибка при установке даты")
+		b.SendError(chatID, "Ошибка при установке даты")
 		return
 	}
 
-	b.confirmDateSelection(ctx, chatID, selectedDate)
+	b.ConfirmDateSelection(ctx, chatID, selectedDate)
 }
 
-func (b *Bot) handleManualDateInput(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleManualDateInput(ctx context.Context, chatID int64, text string) {
 	// Автокоррекция года
     if len(text) == 8 { // формат ДД.ММ.ГГ
         text = text[:6] + "20" + text[6:]
@@ -294,13 +210,13 @@ func (b *Bot) handleManualDateInput(ctx context.Context, chatID int64, text stri
     
     _, err := time.Parse("02.01.2006", text)
     if err != nil {
-        b.sendError(chatID, "Неверный формат даты. Пожалуйста, введите дату в формате ДД.ММ.ГГГГ")
+        b.SendError(chatID, "Неверный формат даты. Пожалуйста, введите дату в формате ДД.ММ.ГГГГ")
         return
     }
 
 	inputDate, _ := time.Parse("02.01.2006", text)
 	if inputDate.Before(time.Now().Truncate(24 * time.Hour)) {
-		b.sendError(chatID, "Пожалуйста, выберите дату в будущем")
+		b.SendError(chatID, "Пожалуйста, выберите дату в будущем")
 		return
 	}
 
@@ -308,15 +224,15 @@ func (b *Bot) handleManualDateInput(ctx context.Context, chatID int64, text stri
 		b.logger.Error("Failed to set manual date",
 			zap.Int64("chat_id", chatID),
 			zap.Error(err))
-		b.sendError(chatID, "Ошибка при сохранении даты")
+		b.SendError(chatID, "Ошибка при сохранении даты")
 		return
 	}
 
-	b.confirmDateSelection(ctx, chatID, text)
+	b.ConfirmDateSelection(ctx, chatID, text)
 }
 
-func (b *Bot) confirmDateSelection(ctx context.Context, chatID int64, date string) {
-	days := b.calculateWorkingDays(date)
+func (b *Bot) ConfirmDateSelection(ctx context.Context, chatID int64, date string) {
+	days := b.CalculateWorkingDays(date)
 
 	text := fmt.Sprintf("Отлично! Вы выбрали дату: %s\nДо этой даты %d рабочих дней (без учёта выходных и праздников).", date, days)
 
@@ -327,7 +243,7 @@ func (b *Bot) confirmDateSelection(ctx context.Context, chatID int64, date strin
 			tgbotapi.NewKeyboardButton("✅ Подтвердить дату"),
 		),
 	)
-	b.sendMessage(msg)
+	b.SendMessage(msg)
 	if err := b.state.SetStep(ctx, chatID, StepDateConfirmation); err != nil {
 		b.logger.Error("Failed to set date confirmation state",
 			zap.Int64("chat_id", chatID),
@@ -335,7 +251,7 @@ func (b *Bot) confirmDateSelection(ctx context.Context, chatID int64, date strin
 	}
 }
 
-func (b *Bot) calculateWorkingDays(date string) int {
+func (b *Bot) CalculateWorkingDays(date string) int {
 	targetDate, _ := time.Parse("02.01.2006", date)
 	now := time.Now()
 
@@ -348,12 +264,12 @@ func (b *Bot) calculateWorkingDays(date string) int {
 	return days
 }
 
-func (b *Bot) handleDateConfirmation(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleDateConfirmation(ctx context.Context, chatID int64, text string) {
     switch text {
     case "✅ Подтвердить дату":
         msg := tgbotapi.NewMessage(chatID, "Как вам удобно предоставить контактные данные?")
         msg.ReplyMarkup = b.CreatePhoneInputKeyboard()
-        b.sendMessage(msg)
+        b.SendMessage(msg)
         
         if err := b.state.SetStep(ctx, chatID, StepContactMethod); err != nil {
             b.logger.Error("Failed to set contact method state",
@@ -365,7 +281,7 @@ func (b *Bot) handleDateConfirmation(ctx context.Context, chatID int64, text str
         // Go back to date selection
         msg := tgbotapi.NewMessage(chatID, "Когда вам удобно выполнить заказ?")
         msg.ReplyMarkup = b.CreateDateSelectionKeyboard()
-        b.sendMessage(msg)
+        b.SendMessage(msg)
         
         if err := b.state.SetStep(ctx, chatID, StepDateSelection); err != nil {
             b.logger.Error("Failed to set date selection state",
@@ -374,11 +290,11 @@ func (b *Bot) handleDateConfirmation(ctx context.Context, chatID int64, text str
         }
         
     default:
-        b.sendError(chatID, "Пожалуйста, используйте кнопки для продолжения")
+        b.SendError(chatID, "Пожалуйста, используйте кнопки для продолжения")
     }
 }
 
-func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandleContactMethod(ctx context.Context, chatID int64, text string) {
     switch text {
     case "📱 Отправить контакт":
         msg := tgbotapi.NewMessage(chatID, "Пожалуйста, нажмите кнопку 'Поделиться контактом'")
@@ -390,28 +306,28 @@ func (b *Bot) handleContactMethod(ctx context.Context, chatID int64, text string
                 tgbotapi.NewKeyboardButton("Назад"),
             ),
         )
-        b.sendMessage(msg)
+        b.SendMessage(msg)
         
     case "Ввести вручную":
         msg := tgbotapi.NewMessage(chatID, "Введите ваш номер телефона в формате +79123456789 или 89123456789:")
-        b.sendMessage(msg)
+        b.SendMessage(msg)
         b.state.SetStep(ctx, chatID, StepPhoneNumber)
         
     case "Назад":
         // Go back to previous step
-        b.handleDateConfirmation(ctx, chatID, "🔁 Сменить дату")
+        b.HandleDateConfirmation(ctx, chatID, "🔁 Сменить дату")
         
     default:
-        b.sendError(chatID, "Пожалуйста, выберите один из вариантов")
+        b.SendError(chatID, "Пожалуйста, выберите один из вариантов")
     }
 }
 
-func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) {
+func (b *Bot) HandlePhoneNumber(ctx context.Context, chatID int64, text string) {
 
     normalized := NormalizePhoneNumber(text)
     
     if !IsValidPhoneNumber(normalized) {
-        b.sendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567 или 89123456789)")
+        b.SendError(chatID, "Пожалуйста, введите реальный номер телефона с кодом страны (например, +79161234567 или 89123456789)")
         return
     }
 
@@ -421,13 +337,13 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
         zap.Bool("is_valid", IsValidPhoneNumber(normalized)))
 
     // Create and save the order
-    orderID, err := b.createOrder(ctx, chatID, normalized)
+    orderID, err := b.CreateOrder(ctx, chatID, normalized)
     if err != nil {
         b.logger.Error("Failed to create order",
             zap.Int64("chat_id", chatID),
             zap.String("phone", normalized),
             zap.Error(err))
-        b.sendError(chatID, "Ошибка при оформлении заказа. Пожалуйста, попробуйте позже.")
+        b.SendError(chatID, "Ошибка при оформлении заказа. Пожалуйста, попробуйте позже.")
         return
     }
 
@@ -441,5 +357,5 @@ func (b *Bot) handlePhoneNumber(ctx context.Context, chatID int64, text string) 
     // Send final confirmation
     msg := tgbotapi.NewMessage(chatID,
         fmt.Sprintf("✅ Ваш заказ успешно оформлен!\nНомер заказа: #%d\n\nС вами свяжутся в ближайшее время.", orderID))
-    b.sendMessage(msg)
+    b.SendMessage(msg)
 }

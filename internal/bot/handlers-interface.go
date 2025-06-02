@@ -42,7 +42,7 @@ type BotHandler interface {
 	// Utility methods
 	CreateOrder(ctx context.Context, chatID int64, phone string) (int64, error)
 	GetOrderTexture(ctx context.Context, chatID int64, state UserState) (*storage.Texture, error)
-	calculateOrderPrice(width, height int, texture *storage.Texture) map[string]float64
+	CalculateOrderPrice(width, height int, texture *storage.Texture) map[string]float64
 	SendUserConfirmation(ctx context.Context, chatID, orderID int64, phone string, width, height int, priceDetails map[string]float64)
 	IsAdmin(chatID int64) bool
 }
