@@ -99,29 +99,27 @@ func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
 
 	// Handle contact sharing first
     if message.Contact != nil {
-    // Normalize the phone number first
-    normalized := NormalizePhoneNumber(message.Contact.PhoneNumber)
-    if !IsValidPhoneNumber(normalized) {
-        b.SendError(chatID, "Пожалуйста, предоставьте действительный номер телефона")
+        // Normalize the phone number first
+        normalized := NormalizePhoneNumber(message.Contact.PhoneNumber)
+        if !IsValidPhoneNumber(normalized) {
+            b.SendError(chatID, "Пожалуйста, предоставьте действительный номер телефона")
+            return
+        }
+        
+        // Skip phone number input step and proceed to create order
+        _, err := b.CreateOrder(ctx, chatID, normalized)
+        if err != nil {
+            b.logger.Error("Failed to create order from contact",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+            b.SendError(chatID, "Ошибка при оформлении заказа")
+            return
+        }
+        
+        // Clear state and send confirmation
+        b.state.ClearState(ctx, chatID)
+
         return
-    }
-    
-    // Skip phone number input step and proceed to create order
-    orderID, err := b.CreateOrder(ctx, chatID, normalized)
-    if err != nil {
-        b.logger.Error("Failed to create order from contact",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        b.SendError(chatID, "Ошибка при оформлении заказа")
-        return
-    }
-    
-    // Clear state and send confirmation
-    b.state.ClearState(ctx, chatID)
-    msg := tgbotapi.NewMessage(chatID,
-        fmt.Sprintf("✅ Ваш заказ успешно оформлен!\nНомер заказа: #%d\n\nС вами свяжутся в ближайшее время.", orderID))
-		b.SendMessage(msg)
-		return
 	}
     
     if message.IsCommand() {
@@ -202,6 +200,7 @@ func (b *Bot) IsAdmin(chatID int64) bool {
 		}
 	return chatID == b.cfg.Admin.ChatID
 }
+
 
 // other commands
 

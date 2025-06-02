@@ -109,6 +109,7 @@ func (b *Bot) HandleCancel(ctx context.Context, chatID int64) {
     b.SendMessage(msg)
 }
 
+
 func (b *Bot) HandleDefault(ctx context.Context, chatID int64) {
 	b.SendError(chatID, "Я не понимаю эту команду. Пожалуйста, используйте меню.")
 }

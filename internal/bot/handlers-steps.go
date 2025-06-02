@@ -152,6 +152,7 @@ func (b *Bot) HandleCustomTextureInput(ctx context.Context, chatID int64, text s
     }
 }
 
+
 func (b *Bot) HandleDimensionsSize(ctx context.Context, chatID int64, text string) {
 	// Handle back button first
     if text == "Назад" {
@@ -365,7 +366,7 @@ func (b *Bot) HandlePhoneNumber(ctx context.Context, chatID int64, text string) 
         zap.Bool("is_valid", IsValidPhoneNumber(normalized)))
 
     // Create and save the order
-    orderID, err := b.CreateOrder(ctx, chatID, normalized)
+    _, err := b.CreateOrder(ctx, chatID, normalized)
     if err != nil {
         b.logger.Error("Failed to create order",
             zap.Int64("chat_id", chatID),
@@ -381,9 +382,5 @@ func (b *Bot) HandlePhoneNumber(ctx context.Context, chatID int64, text string) 
             zap.Int64("chat_id", chatID),
             zap.Error(err))
     }
-
-    // Send final confirmation
-    msg := tgbotapi.NewMessage(chatID,
-        fmt.Sprintf("✅ Ваш заказ успешно оформлен!\nНомер заказа: #%d\n\nС вами свяжутся в ближайшее время.", orderID))
-    b.SendMessage(msg)
+    
 }

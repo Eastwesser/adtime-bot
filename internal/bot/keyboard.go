@@ -79,6 +79,7 @@ func (b *Bot) CreateDimensionsKeyboard() tgbotapi.ReplyKeyboardMarkup {
     )
 }
 
+
 func (b *Bot) CreateDateConfirmationKeyboard() tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
