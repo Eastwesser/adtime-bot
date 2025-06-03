@@ -5,6 +5,7 @@ import (
 	"adtime-bot/pkg/redis"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -81,6 +82,13 @@ func (s *StateStorage) SetService(ctx context.Context, chatID int64, service str
 }
 
 func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
+	if textureID == "" {
+        return errors.New("empty texture ID")
+    }
+    if price <= 0 {
+        return fmt.Errorf("invalid price for texture %s: %.2f", textureID, price)
+    }
+	
 	state, err := s.Get(ctx, chatID)
 	if err != nil {
 		state = UserState{}

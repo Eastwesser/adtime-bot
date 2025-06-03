@@ -140,35 +140,48 @@ func (s *PostgresStorage) GetTextureByID(ctx context.Context, textureID string) 
 	cacheKey := fmt.Sprintf("texture:%s", textureID)
 
 	// Try Redis first
-	cached, err := s.redis.Get(ctx, cacheKey)
-	if err == nil {
-		var texture Texture
-		if err := json.Unmarshal(cached, &texture); err == nil {
-			return &texture, nil
-		}
-	}
+    cached, err := s.redis.Get(ctx, cacheKey)
+    if err == nil {
+        var texture Texture
+        if err := json.Unmarshal(cached, &texture); err == nil {
+            // Add validation for cached texture
+            if texture.PricePerDM2 <= 0 {
+                s.logger.Warn("Invalid price in cached texture",
+                    zap.String("texture_id", textureID),
+                    zap.Float64("price", texture.PricePerDM2))
+                // Force reload from DB by continuing past cache
+            } else {
+                return &texture, nil
+            }
+        }
+    }
 
 	// Fall back to Postgres
-	const query = `
+    const query = `
         SELECT id::text, name, price_per_dm2, image_url, in_stock 
         FROM textures 
         WHERE id = $1
     `
 
 	var texture Texture
-	err = s.db.GetContext(ctx, &texture, query, textureID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("texture not found: %w", err)
-		}
-		return nil, fmt.Errorf("failed to get texture: %w", err)
-	}
+    err = s.db.GetContext(ctx, &texture, query, textureID)
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, fmt.Errorf("texture not found: %w", err)
+        }
+        return nil, fmt.Errorf("failed to get texture: %w", err)
+    }
 
-	// Cache the result
-	if data, err := json.Marshal(texture); err == nil {
-		s.redis.Set(ctx, cacheKey, data, 24*time.Hour)
-	}
+	// Validate price from database
+    if texture.PricePerDM2 <= 0 {
+        return nil, fmt.Errorf("invalid price for texture %s: %.2f", textureID, texture.PricePerDM2)
+    }
 
+	// Cache the validated result
+    if data, err := json.Marshal(texture); err == nil {
+        s.redis.Set(ctx, cacheKey, data, 24*time.Hour)
+    }
+	
 	return &texture, nil
 }
 

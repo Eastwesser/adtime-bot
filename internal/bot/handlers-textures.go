@@ -50,7 +50,16 @@ func (b *Bot) HandleTextureSelection(ctx context.Context, callback *tgbotapi.Cal
     }
 
     // Calculate full price details
-    priceDetails := CalculatePrice(width, height, pricingConfig)
+    priceDetails, err := CalculatePrice(width, height, pricingConfig)
+    if err != nil {
+        b.logger.Error("Failed to calculate price",
+            zap.Int("width", width),
+            zap.Int("height", height),
+            zap.Any("pricing_config", pricingConfig),
+            zap.Error(err))
+        b.SendError(chatID, "Ошибка при расчете цены")
+        return
+    }
 
     // Save texture selection to state
     if err := b.state.SetTexture(ctx, chatID, textureID, priceDetails["final_price"]); err != nil {
@@ -100,6 +109,16 @@ func (b *Bot) HandleTextureSelectionMessage(ctx context.Context, chatID int64, t
         return
     }
 
+    // Save texture selection to state FIRST
+    if err := b.state.SetTexture(ctx, chatID, texture.ID, texture.PricePerDM2); err != nil {
+        b.logger.Error("Failed to save texture selection",
+            zap.Int64("chat_id", chatID),
+            zap.String("texture_id", texture.ID),
+            zap.Error(err))
+        b.SendError(chatID, "Ошибка при сохранении выбора текстуры")
+        return
+    }
+
     b.logger.Info("Selected texture",
         zap.String("name", texture.Name),
         zap.String("id", texture.ID))
@@ -122,7 +141,16 @@ func (b *Bot) HandleTextureSelectionMessage(ctx context.Context, chatID int64, t
         SalesTaxRate:          b.cfg.Pricing.SalesTaxRate,
         MarkupMultiplier:      b.cfg.Pricing.MarkupMultiplier,
     }
-    priceDetails := CalculatePrice(width, height, pricingConfig)
+    priceDetails, err := CalculatePrice(width, height, pricingConfig)
+    if err != nil {
+        b.logger.Error("Failed to calculate price",
+            zap.Int("width", width),
+            zap.Int("height", height),
+            zap.Any("pricing_config", pricingConfig),
+            zap.Error(err))
+        b.SendError(chatID, "Ошибка при расчете цены")
+        return
+    }
 
     // Save selection
     if err := b.state.SetTexture(ctx, chatID, texture.ID, priceDetails["final_price"]); err != nil {

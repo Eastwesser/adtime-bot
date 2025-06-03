@@ -10,11 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (b *Bot) CreateOrder(
-    ctx context.Context, 
-    chatID int64, 
-    phone string,
-    ) (int64, error) {
+func (b *Bot) CreateOrder(ctx context.Context, chatID int64, phone string) (int64, error) {
 
 	state, err := b.state.GetFullState(ctx, chatID)
     if err != nil {
@@ -34,14 +30,27 @@ func (b *Bot) CreateOrder(
     // Use the helper function to get texture
     texture, err := b.GetOrderTexture(ctx, chatID, state)
     if err != nil {
-        b.logger.Error("Failed to get texture",
+        b.logger.Error("Failed to get texture for order",
             zap.Int64("chat_id", chatID),
-            zap.Any("state", state),
             zap.Error(err))
-        return 0, fmt.Errorf("failed to get texture: %w", err)
+        return 0, fmt.Errorf("texture selection required: %w", err)
     }
 
-	priceDetails := b.CalculateOrderPrice(width, height, texture)
+    // Add debug logging to verify prices
+    b.logger.Debug("Using texture for pricing",
+        zap.String("texture_id", texture.ID),
+        zap.String("texture_name", texture.Name),
+        zap.Float64("price_per_dm2", texture.PricePerDM2))
+
+	priceDetails, err := b.CalculateOrderPrice(width, height, texture)
+    if err != nil {
+        b.logger.Error("Failed to calculate price",
+            zap.Int("width", width),
+            zap.Int("height", height),
+            zap.Any("texture", texture),
+            zap.Error(err))
+        return 0, fmt.Errorf("price calculation failed: %w", err)
+    }
 
     order := storage.Order{
         UserID:      chatID,
@@ -103,49 +112,42 @@ func (b *Bot) CreateOrder(
     return orderID, nil
 }
 
-func (b *Bot) GetOrderTexture(
-    ctx context.Context, 
-    chatID int64, 
-    state UserState,
-    ) (*storage.Texture, error) {
-    // If texture ID is set in state, try to get it from storage
+func (b *Bot) GetOrderTexture(ctx context.Context, chatID int64, state UserState) (*storage.Texture, error) {
+    // First try by texture ID
     if state.TextureID != "" {
         texture, err := b.storage.GetTextureByID(ctx, state.TextureID)
-        if err != nil {
-            b.logger.Warn("Failed to get texture by ID, using default",
-                zap.String("texture_id", state.TextureID),
-                zap.Error(err))
-        } else {
+        if err == nil {
             return texture, nil
         }
+        b.logger.Warn("Failed to get texture by ID, falling back to service name",
+            zap.String("texture_id", state.TextureID),
+            zap.Error(err))
     }
 
-    // Fall back to default texture
-    b.logger.Info("Using default texture",
-        zap.Int64("chat_id", chatID))
-        
-    return &storage.Texture{
-        ID:          "11111111-1111-1111-1111-111111111111",
-        Name:        "Стандартная текстура",
-        PricePerDM2: 10.0,
-    }, nil
+    // Fall back to service name if texture ID not set
+    if state.Service != "" {
+        texture, err := b.storage.GetTextureByName(ctx, state.Service)
+        if err == nil {
+            return texture, nil
+        }
+        b.logger.Warn("Failed to get texture by service name",
+            zap.String("service", state.Service),
+            zap.Error(err))
+    }
+
+    return nil, fmt.Errorf("no texture selected")
 }
 
-func (b *Bot) CalculateOrderPrice(
-	width, 
-	height int, 
-	texture *storage.Texture,
-	) map[string]float64 {
+func (b *Bot) CalculateOrderPrice(width, height int, texture *storage.Texture) (map[string]float64, error) {
+    pricingConfig := PricingConfig{
+        LeatherPricePerDM2:    texture.PricePerDM2,
+        ProcessingCostPerDM2:  b.cfg.Pricing.ProcessingCostPerDM2,
+        PaymentCommissionRate: b.cfg.Pricing.PaymentCommissionRate,
+        SalesTaxRate:          b.cfg.Pricing.SalesTaxRate,
+        MarkupMultiplier:      b.cfg.Pricing.MarkupMultiplier,
+    }
 
-	pricingConfig := PricingConfig{
-		LeatherPricePerDM2:    texture.PricePerDM2,
-		ProcessingCostPerDM2:  b.cfg.Pricing.ProcessingCostPerDM2,
-		PaymentCommissionRate: b.cfg.Pricing.PaymentCommissionRate,
-		SalesTaxRate:          b.cfg.Pricing.SalesTaxRate,
-		MarkupMultiplier:      b.cfg.Pricing.MarkupMultiplier,
-	}
-
-	return CalculatePrice(width, height, pricingConfig)
+    return CalculatePrice(width, height, pricingConfig)
 }
 
 func (b *Bot) SendUserConfirmation(

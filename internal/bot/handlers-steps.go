@@ -79,11 +79,30 @@ func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) 
         return
     }
 
-	if err := b.state.SetService(ctx, chatID, text); err != nil {
+    // Get texture by name first
+    texture, err := b.storage.GetTextureByName(ctx, text)
+    if err != nil {
+        b.logger.Error("Failed to get texture by name",
+            zap.String("texture_name", text),
+            zap.Error(err))
+        b.SendError(chatID, "Ошибка при получении информации о текстуре")
+        return
+    }
+
+    // Set both service AND texture
+    if err := b.state.SetService(ctx, chatID, text); err != nil {
         b.logger.Error("Failed to set service",
             zap.Int64("chat_id", chatID),
             zap.Error(err))
         b.SendError(chatID, "Ошибка при сохранении услуги")
+        return
+    }
+
+    if err := b.state.SetTexture(ctx, chatID, texture.ID, texture.PricePerDM2); err != nil {
+        b.logger.Error("Failed to set texture",
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+        b.SendError(chatID, "Ошибка при сохранении текстуры")
         return
     }
 
@@ -115,6 +134,22 @@ func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) 
             zap.Int64("chat_id", chatID),
             zap.Error(err))
     }
+}
+
+func (b *Bot) HandleDebugState(ctx context.Context, chatID int64) {
+    if !b.IsAdmin(chatID) {
+        return
+    }
+    
+    state, err := b.state.GetFullState(ctx, chatID)
+    if err != nil {
+        b.SendError(chatID, "Failed to get state: "+err.Error())
+        return
+    }
+    
+    msg := fmt.Sprintf("Current state:\nTextureID: %s\nDimensions: %dx%d",
+        state.TextureID, state.WidthCM, state.HeightCM)
+    b.SendMessage(tgbotapi.NewMessage(chatID, msg))
 }
 
 func (b *Bot) HandleCustomTextureInput(ctx context.Context, chatID int64, text string) {

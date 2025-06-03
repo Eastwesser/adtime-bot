@@ -1,5 +1,10 @@
 package bot
 
+import (
+	"adtime-bot/internal/config"
+	"fmt"
+)
+
 type PricingConfig struct {
     LeatherPricePerDM2    float64
     ProcessingCostPerDM2  float64
@@ -8,23 +13,44 @@ type PricingConfig struct {
     MarkupMultiplier      float64
 }
 
-func NewDefaultPricing() PricingConfig {
+// func NewDefaultPricing() PricingConfig {
+//     return PricingConfig{
+//         LeatherPricePerDM2:    25.0,
+//         ProcessingCostPerDM2:  31.25, // 1000₽/3200cm² = 0.3125₽/cm² → 31.25₽/dm²
+//         PaymentCommissionRate: 0.03,
+//         SalesTaxRate:          0.06,
+//         MarkupMultiplier:      2.5, // Empirical from our table
+//     }
+// }
+
+func NewPricingConfig(texturePrice float64, cfg *config.Config) PricingConfig {
     return PricingConfig{
-        LeatherPricePerDM2:    25.0,
-        ProcessingCostPerDM2:  31.25, // 1000₽/3200cm² = 0.3125₽/cm² → 31.25₽/dm²
-        PaymentCommissionRate: 0.03,
-        SalesTaxRate:          0.06,
-        MarkupMultiplier:      2.5, // Empirical from our table
+        LeatherPricePerDM2:    texturePrice,
+        ProcessingCostPerDM2:  cfg.Pricing.ProcessingCostPerDM2,
+        PaymentCommissionRate: cfg.Pricing.PaymentCommissionRate,
+        SalesTaxRate:          cfg.Pricing.SalesTaxRate,
+        MarkupMultiplier:      cfg.Pricing.MarkupMultiplier,
     }
 }
 
-func CalculatePrice(widthCm, heightCm int, cfg PricingConfig) (priceDetails map[string]float64) {
+func CalculatePrice(widthCm, heightCm int, cfg PricingConfig) (map[string]float64, error) {
+    
+    if cfg.LeatherPricePerDM2 <= 0 {
+        return nil, fmt.Errorf("invalid leather price: %.2f", cfg.LeatherPricePerDM2)
+    }
+    if cfg.ProcessingCostPerDM2 < 0 {
+        return nil, fmt.Errorf("invalid processing cost: %.2f", cfg.ProcessingCostPerDM2)
+    }
+    if cfg.MarkupMultiplier < 1 {
+        return nil, fmt.Errorf("invalid markup multiplier: %.2f", cfg.MarkupMultiplier)
+    }
+
     areaCm2 := float64(widthCm * heightCm)
     areaDm2 := areaCm2 / 100
     
-    priceDetails = make(map[string]float64)
+    priceDetails := make(map[string]float64)
     
-    // Base costs
+    // Base costs. Use texture price from database
     priceDetails["leather_cost"] = areaDm2 * cfg.LeatherPricePerDM2
     priceDetails["processing_cost"] = areaDm2 * cfg.ProcessingCostPerDM2
     priceDetails["total_cost"] = priceDetails["leather_cost"] + priceDetails["processing_cost"]
@@ -38,5 +64,5 @@ func CalculatePrice(widthCm, heightCm int, cfg PricingConfig) (priceDetails map[
     priceDetails["net_revenue"] = priceDetails["final_price"] - priceDetails["commission"] - priceDetails["tax"]
     priceDetails["profit"] = priceDetails["net_revenue"] - priceDetails["total_cost"]
     
-    return priceDetails
+    return priceDetails, nil
 }
