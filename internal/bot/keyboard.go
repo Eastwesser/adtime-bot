@@ -2,6 +2,7 @@ package bot
 
 import (
 	"adtime-bot/internal/storage"
+	"context"
 	"fmt"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -144,4 +145,15 @@ func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture) tgbotap
     rows = append(rows, []tgbotapi.InlineKeyboardButton{cancelBtn})
     
     return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func (b *Bot) HandleDeleteRequest(ctx context.Context, chatID int64) {
+    msg := tgbotapi.NewMessage(chatID, "Вы уверены, что хотите удалить свои данные?")
+    msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("✅ Да, удалить"),
+            tgbotapi.NewKeyboardButton("❌ Нет, отмена"),
+        ),
+    )
+    b.SendMessage(msg)
 }
