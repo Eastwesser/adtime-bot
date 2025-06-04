@@ -24,8 +24,11 @@ type PostgresStorage struct {
 	logger *zap.Logger
 }
 
-func (s *PostgresStorage) DeleteUserData(ctx context.Context, chatID int64) any {
-	panic("unimplemented")
+func (s *PostgresStorage) DeleteUserData(ctx context.Context, chatID int64) error {
+    // Soft delete с timestamp
+    _, err := s.db.ExecContext(ctx, 
+        "UPDATE orders SET deleted_at = NOW() WHERE user_id = $1", chatID)
+    return err
 }
 
 type Texture struct {
