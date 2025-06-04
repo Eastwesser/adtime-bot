@@ -46,6 +46,11 @@ type Config struct {
         MarkupMultiplier      float64 `env:"MARKUP_MULTIPLIER" envDefault:"2.5"`
     }
 
+	MaxDimensions struct {
+        Width  int `env:"MAX_WIDTH" envDefault:"80"`
+        Height int `env:"MAX_HEIGHT" envDefault:"50"`
+    }
+
 }
 
 func Load() (*Config, error) {

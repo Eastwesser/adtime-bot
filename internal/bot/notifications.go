@@ -14,8 +14,9 @@ func (b *Bot) NotifyPrivacyAgreement(ctx context.Context, username string) {
         b.logger.Warn("Channel notifications disabled - no channel ID configured")
         return
     }
-
+    
     text := fmt.Sprintf("🔐 Пользователь @%s подтвердил согласие на обработку персональных данных.", username)
+
     msg := tgbotapi.NewMessage(b.cfg.Admin.ChannelID, text)
     
     if _, err := b.bot.Send(msg); err != nil {
