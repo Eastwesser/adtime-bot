@@ -179,6 +179,9 @@ func (b *Bot) ProcessCallback(ctx context.Context, callback *tgbotapi.CallbackQu
         b.HandleTextureSelection(ctx, callback)
     case callback.Data == "cancel":
         b.HandleCancel(ctx, chatID)
+    case strings.HasPrefix(callback.Data, "status:"):
+        parts := strings.Split(callback.Data, ":")
+        b.HandleStatusUpdate(ctx, callback.Message.Chat.ID, parts[1], parts[2])    
     default:
         b.logger.Warn("Unknown callback received",
             zap.String("callback_data", callback.Data),
@@ -216,7 +219,8 @@ func (b *Bot) ExportOrdersToSingleFile(ctx context.Context) error {
 func (b *Bot) SendMessage(msg tgbotapi.MessageConfig) {
     // Delete previous bot message first
     // b.DeletePreviousBotMessage(msg.ChatID) //  if we need to clear all for user
-    
+    // msg.ReplyMarkup = b.GetCurrentKeyboard(msg.ChatID) // Добавить эту функцию
+
     // Send new message
     sentMsg, err := b.bot.Send(msg)
     if err != nil {

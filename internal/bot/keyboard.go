@@ -155,5 +155,6 @@ func (b *Bot) HandleDeleteRequest(ctx context.Context, chatID int64) {
             tgbotapi.NewKeyboardButton("❌ Нет, отмена"),
         ),
     )
+
     b.SendMessage(msg)
 }
