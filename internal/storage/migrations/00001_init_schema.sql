@@ -16,8 +16,9 @@ CREATE TABLE textures (
 );
 
 -- Create orders table with improved constraints and relations
+CREATE SEQUENCE orders_id_seq START 1;
 CREATE TABLE orders (
-    id         SERIAL PRIMARY KEY,
+    id         INTEGER PRIMARY KEY DEFAULT nextval('orders_id_seq'),
     user_id    BIGINT         NOT NULL,
     width_cm   INTEGER        NOT NULL CHECK (width_cm > 0 AND width_cm <= 80),
     height_cm  INTEGER        NOT NULL CHECK (height_cm > 0 AND height_cm <= 50),

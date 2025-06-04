@@ -306,7 +306,13 @@ func (s *PostgresStorage) ExportOrderToExcel(ctx context.Context, order Order) (
 
 func (s *PostgresStorage) ExportAllOrdersToExcel(ctx context.Context, filename string) error {
 	// Получаем все заказы из БД
-	const query = `SELECT * FROM orders ORDER BY created_at DESC`
+	const query = `
+		SELECT o.*, t.name as texture_name 
+		FROM orders o
+		LEFT JOIN textures t ON o.texture_id = t.id
+		ORDER BY o.created_at DESC
+	`
+
 	var orders []Order
 	err := s.db.SelectContext(ctx, &orders, query)
 	if err != nil {

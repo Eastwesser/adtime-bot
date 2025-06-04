@@ -51,14 +51,15 @@ func (b *Bot) NotifyNewOrderToChannel(ctx context.Context, order storage.Order, 
         zap.String("username", username))
 
     text := fmt.Sprintf(
-        "📦 <b>Новый заказ #%d</b>\n"+
-        "Услуга: %s\n"+
-        "Дата: %s\n"+
+        "📦 Новый заказ #%d\n"+
+        "Тип: %s\n"+
+        "Размер: %dx%d см\n"+
+        "Цена: %.2f руб\n"+
         "Контакт: %s\n"+
-        "Telegram: @%s",
-        order.ID,
-        order.TextureName,
-        order.CreatedAt.Format("02.01.2006"),
+        "TG: @%s",
+        order.ID, order.TextureName, 
+        order.WidthCM, order.HeightCM,
+        order.Price,
         FormatPhoneNumber(order.Contact),
         username,
     )
@@ -75,6 +76,12 @@ func (b *Bot) NotifyNewOrderToChannel(ctx context.Context, order storage.Order, 
 
 // отправляет детали заказа и Excel файл конкретному админу
 func (b *Bot) NotifyAdmin(ctx context.Context, order storage.Order) {
+    
+    
+    // doc := nil
+    // doc.Caption = fmt.Sprintf("📊 Детали заказа #%d", order.ID)
+    // if _, err := b.bot.Send(doc); err != nil {}
+    
     // Отправляем основное уведомление
     if b.cfg.Admin.ChatID != 0 {
         b.sendAdminNotification(ctx, b.cfg.Admin.ChatID, order)
