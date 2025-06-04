@@ -121,6 +121,11 @@ func (b *Bot) HandleCancel(ctx context.Context, chatID int64) {
         msg = tgbotapi.NewMessage(chatID, "❌ Ввод текстуры отменен. Выберите тип услуги:")
         keyboard = b.CreateServiceTypeKeyboard()
         b.state.SetStep(ctx, chatID, StepServiceType)    
+    
+    case StepServiceType:
+        msg = tgbotapi.NewMessage(chatID, "Вы вернулись к выбору услуги")
+        keyboard = b.CreateServiceTypeKeyboard()
+        b.state.SetStep(ctx, chatID, StepServiceType)
 
     default:
         // Default cancellation - clear all and return to start
