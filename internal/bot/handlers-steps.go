@@ -70,7 +70,7 @@ func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) 
         "Другая текстура": true,
     }
 
-	if !validServices[text] {
+    if !validServices[text] {
         if text == "❌ Отмена" {
             b.HandleCancel(ctx, chatID)
             return
@@ -79,7 +79,33 @@ func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    // Get texture by name first
+    // Handle "Другая текстура" case first
+    if text == "Другая текстура" {
+        if err := b.state.SetService(ctx, chatID, text); err != nil {
+            b.logger.Error("Failed to set service",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+            b.SendError(chatID, "Ошибка при сохранении услуги")
+            return
+        }
+
+        msg := tgbotapi.NewMessage(chatID, "Введите желаемую текстуру:")
+        msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+            tgbotapi.NewKeyboardButtonRow(
+                tgbotapi.NewKeyboardButton("Назад"),
+            ),
+        )
+
+        b.SendMessage(msg)
+        if err := b.state.SetStep(ctx, chatID, CustomTextureInput); err != nil {
+            b.logger.Error("Failed to set custom texture input state",
+                zap.Int64("chat_id", chatID),
+                zap.Error(err))
+        }
+        return
+    }
+    
+    // For other textures, proceed with normal flow
     texture, err := b.storage.GetTextureByName(ctx, text)
     if err != nil {
         b.logger.Error("Failed to get texture by name",
@@ -89,7 +115,15 @@ func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    // Set both service AND texture
+    // Validate texture
+    if texture == nil || texture.ID == "" {
+        b.logger.Error("Invalid texture returned",
+            zap.String("texture_name", text))
+        b.SendError(chatID, "Недопустимая текстура")
+        return
+    }
+
+    // Set both service and texture
     if err := b.state.SetService(ctx, chatID, text); err != nil {
         b.logger.Error("Failed to set service",
             zap.Int64("chat_id", chatID),
@@ -106,25 +140,7 @@ func (b *Bot) HandleServiceType(ctx context.Context, chatID int64, text string) 
         return
     }
 
-    // Особый случай для "Другой текстуры"
-    if text == "Другая текстура" {
-        msg := tgbotapi.NewMessage(chatID, "Введите желаемую текстуру:")
-        msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
-            tgbotapi.NewKeyboardButtonRow(
-                tgbotapi.NewKeyboardButton("Назад"),
-            ),
-        )
-
-        b.SendMessage(msg)
-        if err := b.state.SetStep(ctx, chatID, CustomTextureInput); err != nil {
-            b.logger.Error("Failed to set custom texture input state",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-        }
-        return
-    }
-
-    // Для остальных случаев сразу запрашиваем размеры
+    // Proceed to dimensions input
     msg := tgbotapi.NewMessage(chatID, "Введите ширину и длину в сантиметрах через пробел (например: 30 40)\nМаксимальный размер: 80x50 см")
     msg.ReplyMarkup = b.CreateDimensionsKeyboard()
     b.SendMessage(msg)
@@ -424,4 +440,16 @@ func (b *Bot) HandlePhoneNumber(ctx context.Context, chatID int64, text string) 
             zap.Int64("chat_id", chatID),
             zap.Error(err))
     }
+}
+
+func (b *Bot) HandleDeleteRequest(ctx context.Context, chatID int64) {
+    msg := tgbotapi.NewMessage(chatID, "Вы уверены, что хотите удалить свои данные?")
+    msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("✅ Да, удалить"),
+            tgbotapi.NewKeyboardButton("❌ Нет, отмена"),
+        ),
+    )
+
+    b.SendMessage(msg)
 }

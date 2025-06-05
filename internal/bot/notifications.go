@@ -77,33 +77,31 @@ func (b *Bot) NotifyNewOrderToChannel(ctx context.Context, order storage.Order, 
 
 // отправляет детали заказа и Excel файл конкретному админу
 func (b *Bot) NotifyAdmin(ctx context.Context, order storage.Order) {
-    
-    
-    // doc := nil
-    // doc.Caption = fmt.Sprintf("📊 Детали заказа #%d", order.ID)
-    // if _, err := b.bot.Send(doc); err != nil {}
-    
-    // Отправляем основное уведомление
-    if b.cfg.Admin.ChatID != 0 {
+    // Use a map to track notified admins
+    notifiedAdmins := make(map[int64]bool)
+
+    // Send to main admin if not zero
+    if b.cfg.Admin.ChatID != 0 && !notifiedAdmins[b.cfg.Admin.ChatID] {
         b.sendAdminNotification(ctx, b.cfg.Admin.ChatID, order)
+        notifiedAdmins[b.cfg.Admin.ChatID] = true
     }
     
-    // Отправляем уведомления дополнительным админам
+    // Send to additional admins
     for _, adminID := range b.cfg.Admin.IDs {
-        if adminID != 0 {
+        if adminID != 0 && !notifiedAdmins[adminID] {
             b.sendAdminNotification(ctx, adminID, order)
+            notifiedAdmins[adminID] = true
         }
     }
 }
 
 func (b *Bot) sendAdminNotification(ctx context.Context, chatID int64, order storage.Order) {
-    
     if chatID == 0 {
         b.logger.Warn("Skipping notification to zero chat ID")
         return
     }
-    
-    // Создаем Excel файл
+
+    // Create Excel file first (so we can fail fast if there's an error)
     filepath, err := b.storage.ExportOrderToExcel(ctx, order)
     if err != nil {
         b.logger.Error("Failed to create Excel file for order",
@@ -112,38 +110,33 @@ func (b *Bot) sendAdminNotification(ctx context.Context, chatID int64, order sto
         return
     }
 
-    // Отправляем сообщение с деталями заказа
+    // Prepare the notification message
     msg := tgbotapi.NewMessage(chatID, FormatOrderNotification(order))
-    if _, err := b.bot.Send(msg); err != nil {
-        b.logger.Error("Failed to send order notification",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        return
-    }
     msg.ParseMode = "Markdown"
-    
-    // Добавляем кнопки действий
-    markup := tgbotapi.NewInlineKeyboardMarkup(
-        tgbotapi.NewInlineKeyboardRow(
-            tgbotapi.NewInlineKeyboardButtonData("✅ В обработку", fmt.Sprintf("status:%d:processing", order.ID)),
-            tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("status:%d:cancelled", order.ID)),
-        ),
-    )
-    msg.ReplyMarkup = markup
+
+    // Only add buttons if we have a valid order ID
+    if order.ID > 0 {
+        msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+            tgbotapi.NewInlineKeyboardRow(
+                tgbotapi.NewInlineKeyboardButtonData(
+                    "✅ В обработку", 
+                    fmt.Sprintf("status:%d:processing", order.ID)),
+                tgbotapi.NewInlineKeyboardButtonData(
+                    "❌ Отменить", 
+                    fmt.Sprintf("status:%d:cancelled", order.ID)),
+            ),
+        )
+    }
 
     if _, err := b.bot.Send(msg); err != nil {
         b.logger.Error("Failed to send admin notification",
             zap.Int64("order_id", order.ID),
             zap.Error(err))
+        return
     }
 
-    // Отправляем Excel файл
+    // Send the Excel file
     doc := tgbotapi.NewDocument(chatID, tgbotapi.FilePath(filepath))
-    if _, err := b.bot.Send(doc); err != nil {
-        b.logger.Error("Failed to send order document",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-    }
     doc.Caption = fmt.Sprintf("📊 Детали заказа #%d", order.ID)
     
     if _, err := b.bot.Send(doc); err != nil {

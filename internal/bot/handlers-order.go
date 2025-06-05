@@ -4,6 +4,7 @@ import (
 	"adtime-bot/internal/storage"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -100,8 +101,11 @@ func (b *Bot) CreateOrder(ctx context.Context, chatID int64, phone string) (int6
     } else {
         username = fmt.Sprintf("id%d", chatID)
     }
+    
+	// Update the order with the actual ID before notifications
+    order.ID = orderID
 
-	// Send async notifications
+    // Send notifications with the updated order
     b.SendUserConfirmation(ctx, chatID, orderID, phone, width, height, priceDetails)
     
     go func() {
@@ -110,6 +114,49 @@ func (b *Bot) CreateOrder(ctx context.Context, chatID int64, phone string) (int6
     }()
 
     return orderID, nil
+}
+
+func (b *Bot) HandleMainMenu(ctx context.Context, chatID int64) {
+    msg := tgbotapi.NewMessage(chatID, "Главное меню:")
+    msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("/new_order"),
+            tgbotapi.NewKeyboardButton("/order_history"),
+        ),
+    )
+    b.SendMessage(msg)
+}
+
+
+func (b *Bot) HandleOrderHistory(ctx context.Context, chatID int64) {
+    orders, err := b.storage.GetUserOrders(ctx, chatID)
+    if err != nil {
+        b.logger.Error("Failed to get user orders", zap.Error(err))
+        b.SendError(chatID, "Ошибка при получении истории заказов")
+        return
+    }
+
+    if len(orders) == 0 {
+        b.SendMessage(tgbotapi.NewMessage(chatID, "У вас пока нет заказов"))
+        return
+    }
+
+    var sb strings.Builder
+    sb.WriteString("📋 Ваши заказы:\n\n")
+    for _, order := range orders {
+        sb.WriteString(fmt.Sprintf(
+            "🆔 #%d\n📅 %s\n📏 %dx%d см\n💵 %.2f ₽\n🔄 %s\n\n",
+            order.ID,
+            order.CreatedAt.Format("02.01.2006"),
+            order.WidthCM,
+            order.HeightCM,
+            order.Price,
+            order.Status,
+        ))
+    }
+
+    msg := tgbotapi.NewMessage(chatID, sb.String())
+    b.SendMessage(msg)
 }
 
 func (b *Bot) GetOrderTexture(ctx context.Context, chatID int64, state UserState) (*storage.Texture, error) {

@@ -24,11 +24,23 @@ type PostgresStorage struct {
 	logger *zap.Logger
 }
 
+func (s *PostgresStorage) GetUserOrders(ctx context.Context, userID int64) ([]Order, error) {
+    const query = `
+        SELECT id, width_cm, height_cm, price, status, created_at 
+        FROM orders 
+        WHERE user_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC`
+    
+    var orders []Order
+    err := s.db.SelectContext(ctx, &orders, query, userID)
+    return orders, err
+}
+
 func (s *PostgresStorage) DeleteUserData(ctx context.Context, chatID int64) error {
-    // Soft delete с timestamp
-    _, err := s.db.ExecContext(ctx, 
-        "UPDATE orders SET deleted_at = NOW() WHERE user_id = $1", chatID)
-    return err
+	// Soft delete с timestamp
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE orders SET deleted_at = NOW() WHERE user_id = $1", chatID)
+	return err
 }
 
 type Texture struct {
@@ -40,24 +52,24 @@ type Texture struct {
 }
 
 type Order struct {
-	ID          int64     `db:"id"`
-	UserID      int64     `db:"user_id"`
-	WidthCM     int       `db:"width_cm"`
-	HeightCM    int       `db:"height_cm"`
-	TextureID   string    `db:"texture_id"`
-	TextureName string    `db:"-"`
-	Price       float64   `db:"price"`
-	LeatherCost float64   `db:"leather_cost"`
-	ProcessCost float64   `db:"process_cost"`
-	TotalCost   float64   `db:"total_cost"`
-	Commission  float64   `db:"commission"`
-	Tax         float64   `db:"tax"`
-	NetRevenue  float64   `db:"net_revenue"`
-	Profit      float64   `db:"profit"`
-	Contact     string    `db:"contact"`
-	Status      string    `db:"status"`
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
+    ID          int64     `db:"id"`
+    UserID      int64     `db:"user_id"`
+    WidthCM     int       `db:"width_cm"`
+    HeightCM    int       `db:"height_cm"`
+    TextureID   string    `db:"texture_id"`
+    TextureName string    `db:"texture_name"`
+    Price       float64   `db:"price"`
+    LeatherCost float64   `db:"leather_cost"`
+    ProcessCost float64   `db:"process_cost"`
+    TotalCost   float64   `db:"total_cost"`
+    Commission  float64   `db:"commission"`
+    Tax         float64   `db:"tax"`
+    NetRevenue  float64   `db:"net_revenue"`
+    Profit      float64   `db:"profit"`
+    Contact     string    `db:"contact"`
+    Status      string    `db:"status"`
+    CreatedAt   time.Time `db:"created_at"`
+    UpdatedAt   time.Time `db:"updated_at"`
 }
 
 type OrderStatistics struct {
@@ -143,48 +155,48 @@ func (s *PostgresStorage) GetTextureByID(ctx context.Context, textureID string) 
 	cacheKey := fmt.Sprintf("texture:%s", textureID)
 
 	// Try Redis first
-    cached, err := s.redis.Get(ctx, cacheKey)
-    if err == nil {
-        var texture Texture
-        if err := json.Unmarshal(cached, &texture); err == nil {
-            // Add validation for cached texture
-            if texture.PricePerDM2 <= 0 {
-                s.logger.Warn("Invalid price in cached texture",
-                    zap.String("texture_id", textureID),
-                    zap.Float64("price", texture.PricePerDM2))
-                // Force reload from DB by continuing past cache
-            } else {
-                return &texture, nil
-            }
-        }
-    }
+	cached, err := s.redis.Get(ctx, cacheKey)
+	if err == nil {
+		var texture Texture
+		if err := json.Unmarshal(cached, &texture); err == nil {
+			// Add validation for cached texture
+			if texture.PricePerDM2 <= 0 {
+				s.logger.Warn("Invalid price in cached texture",
+					zap.String("texture_id", textureID),
+					zap.Float64("price", texture.PricePerDM2))
+				// Force reload from DB by continuing past cache
+			} else {
+				return &texture, nil
+			}
+		}
+	}
 
 	// Fall back to Postgres
-    const query = `
+	const query = `
         SELECT id::text, name, price_per_dm2, image_url, in_stock 
         FROM textures 
         WHERE id = $1
     `
 
 	var texture Texture
-    err = s.db.GetContext(ctx, &texture, query, textureID)
-    if err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
-            return nil, fmt.Errorf("texture not found: %w", err)
-        }
-        return nil, fmt.Errorf("failed to get texture: %w", err)
-    }
+	err = s.db.GetContext(ctx, &texture, query, textureID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("texture not found: %w", err)
+		}
+		return nil, fmt.Errorf("failed to get texture: %w", err)
+	}
 
 	// Validate price from database
-    if texture.PricePerDM2 <= 0 {
-        return nil, fmt.Errorf("invalid price for texture %s: %.2f", textureID, texture.PricePerDM2)
-    }
+	if texture.PricePerDM2 <= 0 {
+		return nil, fmt.Errorf("invalid price for texture %s: %.2f", textureID, texture.PricePerDM2)
+	}
 
 	// Cache the validated result
-    if data, err := json.Marshal(texture); err == nil {
-        s.redis.Set(ctx, cacheKey, data, 24*time.Hour)
-    }
-	
+	if data, err := json.Marshal(texture); err == nil {
+		s.redis.Set(ctx, cacheKey, data, 24*time.Hour)
+	}
+
 	return &texture, nil
 }
 
@@ -211,32 +223,33 @@ func (s *PostgresStorage) SaveOrder(ctx context.Context, order Order) (int64, er
     `
 
 	var orderID int64
-	err := s.db.QueryRowContext(ctx, query,
-		order.UserID,
-		order.WidthCM,
-		order.HeightCM,
-		order.TextureID,
-		order.Price,
-		order.LeatherCost,
-		order.ProcessCost,
-		order.TotalCost,
-		order.Commission,
-		order.Tax,
-		order.NetRevenue,
-		order.Profit,
-		order.Contact,
-		order.Status,
-		order.CreatedAt,
-	).Scan(&orderID)
+    err := s.db.QueryRowContext(ctx, query,
+        order.UserID,
+        order.WidthCM,
+        order.HeightCM,
+        order.TextureID,
+        order.Price,
+        order.LeatherCost,
+        order.ProcessCost,
+        order.TotalCost,
+        order.Commission,
+        order.Tax,
+        order.NetRevenue,
+        order.Profit,
+        order.Contact,
+        order.Status,
+        order.CreatedAt,
+    ).Scan(&orderID)
+
 
 	if err != nil {
-		return 0, fmt.Errorf("failed to save order: %w", err)
-	}
+        return 0, fmt.Errorf("failed to save order: %w", err)
+    }
 
 	// Invalidate statistics cache
-	s.redis.Del(ctx, "order_stats")
+    s.redis.Del(ctx, "order_stats")
 
-	return orderID, nil
+    return orderID, nil
 }
 
 func (s *PostgresStorage) ExportOrderToExcel(ctx context.Context, order Order) (string, error) {
@@ -305,19 +318,23 @@ func (s *PostgresStorage) ExportOrderToExcel(ctx context.Context, order Order) (
 }
 
 func (s *PostgresStorage) ExportAllOrdersToExcel(ctx context.Context, filename string) error {
+    const operation = "storage.ExportAllOrdersToExcel"
+	
 	// Получаем все заказы из БД
 	const query = `
-		SELECT o.*, t.name as texture_name 
-		FROM orders o
-		LEFT JOIN textures t ON o.texture_id = t.id
-		ORDER BY o.created_at DESC
-	`
-
-	var orders []Order
-	err := s.db.SelectContext(ctx, &orders, query)
-	if err != nil {
-		return fmt.Errorf("failed to fetch orders: %w", err)
-	}
+        SELECT o.*, t.name as texture_name 
+        FROM orders o
+        LEFT JOIN textures t ON o.texture_id = t.id
+        ORDER BY o.created_at DESC
+    `
+	
+    var orders []Order
+    if err := s.db.SelectContext(ctx, &orders, query); err != nil {
+        s.logger.Error("Failed to fetch orders for export",
+            zap.Error(err),
+            zap.String("operation", operation))
+        return fmt.Errorf("failed to fetch orders: %w", err)
+    }
 
 	f := excelize.NewFile()
 	defer f.Close()
