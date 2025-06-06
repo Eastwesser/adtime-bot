@@ -98,6 +98,7 @@ func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
     
     chatID := message.Chat.ID
 
+    
 	// Handle contact sharing first
     if message.Contact != nil {
         // Normalize the phone number first
