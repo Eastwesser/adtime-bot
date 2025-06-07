@@ -8,82 +8,49 @@ import (
 	"go.uber.org/zap"
 )
 
-func (b *Bot) HandleStart(ctx context.Context, chatID int64) {
-	// Check signed TPA
-	agreed, phone, err := b.storage.GetUserAgreement(ctx, chatID)
-	if err != nil {
-		b.logger.Error("Failed to check user agreement", zap.Error(err))
-	}
-
-	if agreed && phone != "" {
-		// If user has signed TPA, show menu
-		b.ShowMainMenu(ctx, chatID, phone)
-		return
-	}
-
-	msg := tgbotapi.NewMessage(chatID, `Привет! 👋
-
-    ⚠️ Прежде чем продолжить, вы должны согласиться с:
-    1. Нашей Политикой конфиденциальности
-    2. Telegram Bot Privacy Policy (TPA)
-    
-    Используя бота, вы подтверждаете согласие на обработку данных в соответствии с этими документами.`)
-
-	b.ShowPrivacyPolicy(chatID)
-
-	msg.ReplyMarkup = b.CreatePrivacyAgreementKeyboard()
-	b.SendMessage(msg)
-
-	if err := b.state.SetStep(ctx, chatID, StepPrivacyAgreement); err != nil {
-		b.logger.Error("Failed to set privacy agreement state",
-			zap.Int64("chat_id", chatID),
-			zap.Error(err))
-	}
-}
-
 // ShowMainMenu displays the main menu with options for authenticated users
 func (b *Bot) ShowMainMenu(ctx context.Context, chatID int64, phone string) {
-    // Clear any previous order state while keeping essential user data
-    if err := b.state.ResetOrderState(ctx, chatID); err != nil {
-        b.logger.Error("Failed to reset order state",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        // Continue despite the error as it's not critical for showing the menu
-    }
+	// Clear any previous order state while keeping essential user data
+	if err := b.state.ResetOrderState(ctx, chatID); err != nil {
+		b.logger.Error("Failed to reset order state",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		// Continue despite the error as it's not critical for showing the menu
+	}
 
-    // Save phone number if provided
-    if phone != "" {
-        if err := b.state.SetPhoneNumber(ctx, chatID, phone); err != nil {
-            b.logger.Error("Failed to set phone number in state",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-        }
-    } else {
-        b.logger.Warn("Empty phone number provided to ShowMainMenu",
-            zap.Int64("chat_id", chatID))
-    }
+	// Save phone number if provided
+	if phone != "" {
+		if err := b.state.SetPhoneNumber(ctx, chatID, phone); err != nil {
+			b.logger.Error("Failed to set phone number in state",
+				zap.Int64("chat_id", chatID),
+				zap.Error(err))
+		}
+	} else {
+		b.logger.Warn("Empty phone number provided to showMainMenu",
+			zap.Int64("chat_id", chatID))
+	}
 
-    // Format phone for display
-    formattedPhone := "не указан"
-    if phone != "" {
-        formattedPhone = FormatPhoneNumber(phone)
-    }
+	// Format phone for display
+	formattedPhone := "не указан"
+	if phone != "" {
+		formattedPhone = FormatPhoneNumber(phone)
+	}
 
-    msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
-        "🏠 *Главное меню*\n\n"+
-            "Ваш контактный номер: %s\n"+
-            "Выберите действие:",
-        formattedPhone))
-    
-    msg.ReplyMarkup = b.CreateMainMenuKeyboard()
-    msg.ParseMode = "Markdown"
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
+		"🏠 *Главное меню*\n\n"+
+			"Ваш контактный номер: %s\n"+
+			"Выберите действие:",
+		formattedPhone))
 
-    if _, err := b.bot.Send(msg); err != nil {
-        b.logger.Error("Failed to send main menu",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        // Consider adding retry logic here if needed
-    }
+	msg.ReplyMarkup = b.CreateMainMenuKeyboard()
+	msg.ParseMode = "Markdown"
+
+	if _, err := b.bot.Send(msg); err != nil {
+		b.logger.Error("Failed to send main menu",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		// Consider adding retry logic here if needed
+	}
 }
 
 func (b *Bot) ShowPrivacyPolicy(chatID int64) {

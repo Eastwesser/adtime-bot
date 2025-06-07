@@ -18,6 +18,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - migrator
     restart: unless-stopped
 
   redis:
