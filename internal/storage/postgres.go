@@ -399,9 +399,44 @@ func (s *PostgresStorage) ExportAllOrdersToExcel(ctx context.Context, filename s
 	return nil
 }
 
+func (s *PostgresStorage) SaveUserAgreement(ctx context.Context, userID int64, phone string) error {
+    const query = `
+        INSERT INTO users (user_id, agreed_to_tpa, phone_number)
+        VALUES ($1, TRUE, $2)
+        ON CONFLICT (user_id) 
+        DO UPDATE SET agreed_to_tpa = TRUE, phone_number = $2
+    `
+    _, err := s.db.ExecContext(ctx, query, userID, phone)
+    return err
+}
+
+
+func (s *PostgresStorage) GetUserAgreement(ctx context.Context, userID int64) (bool, string, error) {
+    const query = `
+		SELECT agreed_to_tpa, phone_number 
+		FROM users 
+		WHERE user_id = $1
+	`
+    
+	var agreed bool
+    var phone string
+    err := s.db.QueryRowContext(ctx, query, userID).Scan(&agreed, &phone)
+    if errors.Is(err, sql.ErrNoRows) {
+        return false, "", nil
+    }
+    return agreed, phone, err
+}
+
 func (s *PostgresStorage) UpdateOrderStatus(ctx context.Context, orderID int64, status string) error {
 	// Get all orders
-	const query = `SELECT * FROM orders ORDER BY created_at DESC`
+	const query = `
+		SELECT * 
+		FROM orders 
+		ORDER BY created_at 
+		DESC
+	`
+	
+	
 	var orders []Order
 	if err := s.db.SelectContext(ctx, &orders, query); err != nil {
 		return fmt.Errorf("failed to fetch orders: %w", err)

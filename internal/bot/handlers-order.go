@@ -197,15 +197,13 @@ func (b *Bot) CalculateOrderPrice(width, height int, texture *storage.Texture) (
     return CalculatePrice(width, height, pricingConfig)
 }
 
-func (b *Bot) SendUserConfirmation(
-    ctx context.Context, 
-    chatID, 
-    orderID int64, 
-    phone string, 
-    width, 
-    height int, 
-    priceDetails map[string]float64,
-) {
+func (b *Bot) SendUserConfirmation(ctx context.Context, chatID, orderID int64, phone string, width, height int, priceDetails map[string]float64) {
+    // Сохраняем согласие и телефон пользователя
+    err := b.storage.SaveUserAgreement(ctx, chatID, phone)
+    if err != nil {
+        b.logger.Error("Failed to save user agreement", zap.Error(err))
+    }
+    
     // This will be the ONLY confirmation message for user
     msgText := fmt.Sprintf(
         "✅ Ваш заказ #%d оформлен!\n"+
@@ -218,5 +216,48 @@ func (b *Bot) SendUserConfirmation(
     )
     
     msg := tgbotapi.NewMessage(chatID, msgText)
+    msg.ReplyMarkup = b.CreateMainMenuKeyboard() // Добавляем главное меню
     b.SendMessage(msg)
+    // show keyboard for another order
+    b.ShowMainMenu(ctx, chatID, phone)
+}
+
+func (b *Bot) HandleNewOrder(ctx context.Context, chatID int64) {
+    // Check saved data
+    _, phone, err := b.storage.GetUserAgreement(ctx, chatID)
+    if err != nil {
+        b.logger.Error("Failed to get user agreement", zap.Error(err))
+        b.SendError(chatID, "Произошла ошибка, попробуйте позже")
+        return
+    }
+
+    // Clear order state but keep phone number
+    if err := b.state.ResetOrderState(ctx, chatID); err != nil {
+        b.logger.Error("Failed to clear order state", 
+            zap.Int64("chat_id", chatID),
+            zap.Error(err))
+    }
+
+    if phone != "" {
+        // User has saved phone - skip to service selection
+        msg := tgbotapi.NewMessage(chatID, "Начнём новый заказ! Выберите тип услуги:")
+        msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
+        b.SendMessage(msg)
+        b.state.SetStep(ctx, chatID, StepServiceType)
+    } else {
+        // No saved phone - start standard process
+        b.HandleStart(ctx, chatID)
+    }
+    // if phone != "" {
+    //     // User has saved phone - skip agreement and phone steps
+    //     b.state.SetPhoneNumber(ctx, chatID, phone)
+        
+    //     msg := tgbotapi.NewMessage(chatID, "Начнём новый заказ! Выберите тип услуги:")
+    //     msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
+    //     b.SendMessage(msg)
+    //     b.state.SetStep(ctx, chatID, StepServiceType)
+    // } else {
+    //     // No saved phone - start standard process
+    //     b.HandleStart(ctx, chatID)
+    // }
 }

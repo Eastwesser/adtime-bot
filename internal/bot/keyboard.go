@@ -8,12 +8,28 @@ import (
 )
 
 func (b *Bot) CreateMainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	return tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/start"),
-			tgbotapi.NewKeyboardButton("/help"),
-		),
-	)
+    return tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("🆕 Новый заказ"),
+            tgbotapi.NewKeyboardButton("📋 Мои заказы"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("ℹ️ Помощь"),
+        ),
+    )
+}
+
+func (b *Bot) CreateMainMenuKeyboardAgreedTPA() tgbotapi.ReplyKeyboardMarkup {
+    return tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("🛍 Новый заказ"),
+            tgbotapi.NewKeyboardButton("📋 Мои заказы"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("✏️ Изменить номер"),
+            tgbotapi.NewKeyboardButton("ℹ️ Помощь"),
+        ),
+    )
 }
 
 func (b *Bot) CreateConfirmationKeyboard() tgbotapi.ReplyKeyboardMarkup {

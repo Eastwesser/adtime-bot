@@ -6,13 +6,15 @@ import (
 	"adtime-bot/pkg/redis"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"slices"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.uber.org/zap"
-	"slices"
 )
 
 type Bot struct {
@@ -140,9 +142,18 @@ func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
             b.HandleStart(ctx, chatID)
         case "help":
             b.HandleHelp(ctx, chatID)
+        case "new_order":
+            b.HandleNewOrder(ctx, chatID)
         default:
             b.HandleUnknownCommand(ctx, chatID)
         }
+        return
+        
+    }
+
+    // Add handling for "New Order" button
+    if message.Text == "🆕 Новый заказ" {
+        b.HandleNewOrder(ctx, chatID)
         return
     }
 
@@ -190,6 +201,61 @@ func (b *Bot) ProcessCallback(ctx context.Context, callback *tgbotapi.CallbackQu
             zap.Int("message_id", callback.Message.MessageID),
             zap.String("user", callback.From.UserName))
         b.SendError(chatID, "Неизвестная команда")
+    }
+}
+
+func (b *Bot) HandleAdminStatusUpdate(ctx context.Context, chatID int64, orderIDStr, action string) {
+    if !b.IsAdmin(chatID) {
+        b.SendError(chatID, "❌ У вас нет прав для этого действия")
+        return
+    }
+
+    orderID, err := strconv.ParseInt(orderIDStr, 10, 64)
+    if err != nil {
+        b.SendError(chatID, "❌ Неверный ID заказа")
+        return
+    }
+
+    var newStatus string
+    switch action {
+    case "processing":
+        newStatus = "processing"
+    case "cancelled":
+        newStatus = "cancelled"
+    default:
+        b.SendError(chatID, "❌ Неизвестное действие")
+        return
+    }
+
+    err = b.storage.UpdateOrderStatus(ctx, orderID, newStatus)
+    if err != nil {
+        b.logger.Error("Failed to update order status", zap.Error(err))
+        b.SendError(chatID, "❌ Ошибка при обновлении статуса")
+        return
+    }
+
+    // Отправляем подтверждение админу
+    b.SendMessage(tgbotapi.NewMessage(chatID, fmt.Sprintf(
+        "✅ Статус заказа #%d изменён на: %s",
+        orderID,
+        map[string]string{
+            "processing": "В обработке",
+            "cancelled": "Отменён",
+        }[newStatus],
+    )))
+
+    // Уведомляем пользователя
+    order, err := b.storage.GetOrderByID(ctx, orderID)
+    if err == nil {
+        userMsg := tgbotapi.NewMessage(order.UserID, fmt.Sprintf(
+            "ℹ️ Статус вашего заказа #%d изменён на: %s",
+            orderID,
+            map[string]string{
+                "processing": "В обработке",
+                "cancelled": "Отменён",
+            }[newStatus],
+        ))
+        b.SendMessage(userMsg)
     }
 }
 

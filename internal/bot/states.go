@@ -21,7 +21,7 @@ type UserState struct {
 	TextureID   string `json:"texture_id"`
 	Price       string `json:"price"`
 }
-  
+
 type StateStorage struct {
 	redis *redis.Client
 	ttl   time.Duration
@@ -29,31 +29,31 @@ type StateStorage struct {
 
 func (s *StateStorage) SetLastBotMessageID(ctx context.Context, chatID int64, messageID int) error {
 
-    data, err := json.Marshal(messageID)
-    if err != nil {
-        return fmt.Errorf("failed to marshal message ID: %w", err)
-    }
-    
-    key := fmt.Sprintf("last_msg:%d", chatID)
-    if err := s.redis.Set(ctx, key, data, s.ttl); err != nil {
-        return fmt.Errorf("failed to set last message ID: %w", err)
-    }
-    return nil
+	data, err := json.Marshal(messageID)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message ID: %w", err)
+	}
+
+	key := fmt.Sprintf("last_msg:%d", chatID)
+	if err := s.redis.Set(ctx, key, data, s.ttl); err != nil {
+		return fmt.Errorf("failed to set last message ID: %w", err)
+	}
+	return nil
 }
 
 func (s *StateStorage) GetLastBotMessageID(ctx context.Context, chatID int64) (int, error) {
-    key := fmt.Sprintf("last_msg:%d", chatID)
-    data, err := s.redis.Get(ctx, key)
-    if err != nil {
-        return 0, fmt.Errorf("failed to get last message ID: %w", err)
-    }
-    
-    var messageID int
-    if err := json.Unmarshal(data, &messageID); err != nil {
-        return 0, fmt.Errorf("failed to unmarshal message ID: %w", err)
-    }
-    
-    return messageID, nil
+	key := fmt.Sprintf("last_msg:%d", chatID)
+	data, err := s.redis.Get(ctx, key)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last message ID: %w", err)
+	}
+
+	var messageID int
+	if err := json.Unmarshal(data, &messageID); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal message ID: %w", err)
+	}
+
+	return messageID, nil
 }
 
 func NewStateStorage(redis *redis.Client) *StateStorage {
@@ -83,12 +83,12 @@ func (s *StateStorage) SetService(ctx context.Context, chatID int64, service str
 
 func (s *StateStorage) SetTexture(ctx context.Context, chatID int64, textureID string, price float64) error {
 	if textureID == "" {
-        return errors.New("empty texture ID")
-    }
-    if price <= 0 {
-        return fmt.Errorf("invalid price for texture %s: %.2f", textureID, price)
-    }
-	
+		return errors.New("empty texture ID")
+	}
+	if price <= 0 {
+		return fmt.Errorf("invalid price for texture %s: %.2f", textureID, price)
+	}
+
 	state, err := s.Get(ctx, chatID)
 	if err != nil {
 		state = UserState{}
@@ -175,7 +175,7 @@ func (s *StateStorage) GetTexture(ctx context.Context, chatID int64) (*storage.T
 
 	// Return a basic texture with just the ID
 	return &storage.Texture{
-		ID: state.TextureID,
+		ID:          state.TextureID,
 		Name:        "Unknown Texture",
 		PricePerDM2: 0.0,
 	}, nil
@@ -213,10 +213,25 @@ func (s *StateStorage) SaveOrderState(ctx context.Context, chatID int64) error {
 	return s.ResetOrderState(ctx, chatID)
 }
 
+// func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
+// 	return s.Save(ctx, chatID, UserState{
+// 		Step: StepPrivacyAgreement,
+// 	})
+// }
+
 func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
-	return s.Save(ctx, chatID, UserState{
-		Step: StepPrivacyAgreement,
-	})
+    // Get current state to preserve phone number
+    currentState, err := s.Get(ctx, chatID)
+    if err != nil {
+        // If no state exists, start fresh
+        currentState = UserState{}
+    }
+
+    // Reset all fields except phone number
+    return s.Save(ctx, chatID, UserState{
+        PhoneNumber: currentState.PhoneNumber, // Preserve phone
+        Step:        StepServiceType,          // Or StepPrivacyAgreement if needed
+    })
 }
 
 func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
