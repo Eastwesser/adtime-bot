@@ -11,6 +11,9 @@ import (
 )
 
 type UserState struct {
+	CurrentMenu    string `json:"current_menu"`
+    PrintingPage   int    `json:"printing_page"` 
+    SelectedProduct string `json:"selected_product"`
 	Step        string `json:"step"`
 	Service     string `json:"service"`
 	ServiceType string `json:"service_type"`
@@ -237,4 +240,47 @@ func (s *StateStorage) Clear(ctx context.Context, chatID int64) error {
 
 func (s *StateStorage) ClearState(ctx context.Context, chatID int64) error {
 	return s.Clear(ctx, chatID)
+}
+
+func (s *StateStorage) SetCurrentMenu(ctx context.Context, chatID int64, menu string) error {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        state = UserState{}
+    }
+    state.CurrentMenu = menu
+    return s.Save(ctx, chatID, state)
+}
+
+func (s *StateStorage) GetCurrentMenu(ctx context.Context, chatID int64) (string, error) {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        return "", err
+    }
+    return state.CurrentMenu, nil
+}
+
+func (s *StateStorage) SetPrintingPage(ctx context.Context, chatID int64, page int) error {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        state = UserState{}
+    }
+    state.PrintingPage = page
+    return s.Save(ctx, chatID, state)
+}
+
+func (s *StateStorage) GetPrintingPage(ctx context.Context, chatID int64) (int, error) {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        return 1, err
+    }
+    return state.PrintingPage, nil
+}
+
+func (s *StateStorage) SetSelectedProduct(ctx context.Context, chatID int64, product string) error {
+    state, err := s.Get(ctx, chatID)
+    if err != nil {
+        state = UserState{}
+    }
+    state.SelectedProduct = product
+    return s.Save(ctx, chatID, state)
 }

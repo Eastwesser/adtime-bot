@@ -12,4 +12,8 @@ const (
     StepPhoneNumber      = "phone_number"
     StepTextureSelection = "texture_selection"
     CustomTextureInput   = "custom_texture_input"
+    StepPrintingSelection = "printing_selection"
+    StepVinylSelection    = "vinyl_selection"
+    StepPrintingOptions   = "printing_options"
+    StepVinylOptions      = "vinyl_options"
 )

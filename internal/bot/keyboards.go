@@ -10,11 +10,11 @@ import (
 func (b *Bot) CreateMainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
     return tgbotapi.NewReplyKeyboard(
         tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("🆕 Новый заказ"),
-            tgbotapi.NewKeyboardButton("📋 Мои заказы"),
+            tgbotapi.NewKeyboardButton("Аксессуары из кожи"),
+            tgbotapi.NewKeyboardButton("Типография"),
         ),
         tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("ℹ️ Помощь"),
+            tgbotapi.NewKeyboardButton("Печать наклеек"),
         ),
     )
 }
@@ -160,4 +160,110 @@ func (b *Bot) CreateTextureSelectionKeyboard(textures []storage.Texture) tgbotap
     rows = append(rows, []tgbotapi.InlineKeyboardButton{cancelBtn})
     
     return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func (b *Bot) CreatePrintingMenuKeyboard(page int) tgbotapi.ReplyKeyboardMarkup {
+    products := []string{"Визитки", "Бирки", "Листовки", "Буклеты", "Каталоги", "Календари", "Открытки"}
+    return b.CreatePagedKeyboard(products, page, 4)
+}
+
+func (b *Bot) CreateVinylServicesKeyboard() tgbotapi.ReplyKeyboardMarkup {
+    return tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Печать на пленке"),
+            tgbotapi.NewKeyboardButton("Резка пленки"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Ламинация"),
+            tgbotapi.NewKeyboardButton("Комплекс"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("В главное меню"),
+        ),
+    )
+}
+
+func (b *Bot) CreateOptionsKeyboard(options []string) tgbotapi.ReplyKeyboardMarkup {
+    var rows [][]tgbotapi.KeyboardButton
+    
+    for i := 0; i < len(options); i += 2 {
+        row := make([]tgbotapi.KeyboardButton, 0)
+        if i < len(options) {
+            row = append(row, tgbotapi.NewKeyboardButton(options[i]))
+        }
+        if i+1 < len(options) {
+            row = append(row, tgbotapi.NewKeyboardButton(options[i+1]))
+        }
+        rows = append(rows, row)
+    }
+    
+    rows = append(rows, []tgbotapi.KeyboardButton{
+        tgbotapi.NewKeyboardButton("Назад"),
+        tgbotapi.NewKeyboardButton("Рассчитать"),
+    })
+    
+    return tgbotapi.NewReplyKeyboard(rows...)
+}
+
+func (b *Bot) CreatePagedKeyboard(items []string, page, itemsPerPage int) tgbotapi.ReplyKeyboardMarkup {
+    start := (page - 1) * itemsPerPage
+    end := start + itemsPerPage
+    if end > len(items) {
+        end = len(items)
+    }
+
+    var rows [][]tgbotapi.KeyboardButton
+    currentRow := make([]tgbotapi.KeyboardButton, 0, 2)
+    
+    for _, item := range items[start:end] {
+        btn := tgbotapi.NewKeyboardButton(item)
+        currentRow = append(currentRow, btn)
+        
+        if len(currentRow) == 2 {
+            rows = append(rows, currentRow)
+            currentRow = make([]tgbotapi.KeyboardButton, 0, 2)
+        }
+    }
+
+    if len(currentRow) > 0 {
+        rows = append(rows, currentRow)
+    }
+
+    navRow := make([]tgbotapi.KeyboardButton, 0)
+    if page > 1 {
+        navRow = append(navRow, tgbotapi.NewKeyboardButton("Назад"))
+    }
+    if end < len(items) {
+        navRow = append(navRow, tgbotapi.NewKeyboardButton("Далее"))
+    }
+    if len(navRow) > 0 {
+        rows = append(rows, navRow)
+    }
+
+    rows = append(rows, []tgbotapi.KeyboardButton{
+        tgbotapi.NewKeyboardButton("В главное меню"),
+    })
+
+    return tgbotapi.NewReplyKeyboard(rows...)
+}
+
+func (b *Bot) CreateVinylOptionsKeyboard() tgbotapi.ReplyKeyboardMarkup {
+    return tgbotapi.NewReplyKeyboard(
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("0.5 м²"),
+            tgbotapi.NewKeyboardButton("1 м²"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("2 м²"),
+            tgbotapi.NewKeyboardButton("5 м²"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Черно-белое"),
+            tgbotapi.NewKeyboardButton("Цветное"),
+        ),
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("Назад"),
+            tgbotapi.NewKeyboardButton("Рассчитать"),
+        ),
+    )
 }

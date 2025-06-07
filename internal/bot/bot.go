@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"adtime-bot/internal/bot/calculators"
 	"adtime-bot/internal/config"
 	"adtime-bot/internal/storage"
 	"adtime-bot/pkg/redis"
@@ -25,6 +26,8 @@ type Bot struct {
 	cfg      *config.Config
 	mu       sync.Mutex
 	handlers map[string]func(context.Context, int64, string)
+    printingCalculator *calculators.PrintingCalculator
+    vinylCalculator    *calculators.VinylCalculator
 }
 
 func New(
@@ -51,10 +54,15 @@ func New(
 		state:   NewStateStorage(redisClient),
 		storage: pgStorage,
 		cfg:     cfg,
+        printingCalculator: calculators.NewPrintingCalculator(),
+        vinylCalculator:    calculators.NewVinylCalculator(),
 	}
 
 	b.RegisterHandlers()
-	return b, nil
+    b.RegisterPrintingHandlers()
+    b.RegisterVinylHandlers()
+
+    return b, nil
 }
 
 func (b *Bot) RegisterHandlers() {
@@ -181,6 +189,45 @@ func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
     } else {
         b.HandleDefault(ctx, chatID)
     }
+
+    // Получаем текущее меню
+    currentMenu, _ := b.state.GetCurrentMenu(ctx, chatID)
+
+    // Обработка главного меню
+    if message.Text == "Типография" {
+        b.state.SetCurrentMenu(ctx, chatID, "printing")
+        b.HandlePrintingMenu(ctx, chatID, 1)
+        return
+    }
+
+    // Обработка навигации
+    if message.Text == "Назад" || message.Text == "Далее" {
+        if currentMenu == "printing" {
+            b.HandlePrintingNavigation(ctx, chatID, message.Text)
+            return
+        }
+    }
+
+    // Обработка выбора продукта
+    printingProducts := []string{"Визитки", "Бирки", "Листовки", "Буклеты", "Каталоги", "Календари", "Открытки"}
+    if slices.Contains(printingProducts, message.Text) {
+        b.HandlePrintingSelection(ctx, chatID, message.Text)
+        return
+    }
+
+    // Обработка главного меню
+    if message.Text == "Печать наклеек" {
+        b.state.SetCurrentMenu(ctx, chatID, "vinyl")
+        b.HandleVinylMenu(ctx, chatID)
+        return
+    }
+
+    // Обработка выбора услуги наклеек
+    vinylServices := []string{"Печать на пленке", "Резка пленки", "Ламинация", "Комплекс"}
+    if slices.Contains(vinylServices, message.Text) && currentMenu == "vinyl" {
+        b.HandleVinylSelection(ctx, chatID, message.Text)
+        return
+    }
 }
 
 func (b *Bot) ProcessCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
@@ -274,9 +321,6 @@ func (b *Bot) IsAdmin(chatID int64) bool {
     // Check both the main admin and additional admins
     return chatID == b.cfg.Admin.ChatID || slices.Contains(b.cfg.Admin.IDs, chatID)
 }
-
-
-// other commands
 
 func (b *Bot) ExportOrdersToSingleFile(ctx context.Context) error {
 	filename := fmt.Sprintf("orders_report_%s", time.Now().Format("20060102_1504"))
