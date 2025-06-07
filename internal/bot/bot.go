@@ -284,9 +284,6 @@ func (b *Bot) ExportOrdersToSingleFile(ctx context.Context) error {
 }
 
 func (b *Bot) SendMessage(msg tgbotapi.MessageConfig) {
-    // Delete previous bot message first
-    // b.DeletePreviousBotMessage(msg.ChatID) //  if we need to clear all for user
-    // msg.ReplyMarkup = b.GetCurrentKeyboard(msg.ChatID) // Добавить эту функцию
 
     // Send new message
     sentMsg, err := b.bot.Send(msg)

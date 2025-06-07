@@ -248,16 +248,5 @@ func (b *Bot) HandleNewOrder(ctx context.Context, chatID int64) {
         // No saved phone - start standard process
         b.HandleStart(ctx, chatID)
     }
-    // if phone != "" {
-    //     // User has saved phone - skip agreement and phone steps
-    //     b.state.SetPhoneNumber(ctx, chatID, phone)
-        
-    //     msg := tgbotapi.NewMessage(chatID, "Начнём новый заказ! Выберите тип услуги:")
-    //     msg.ReplyMarkup = b.CreateServiceTypeKeyboard()
-    //     b.SendMessage(msg)
-    //     b.state.SetStep(ctx, chatID, StepServiceType)
-    // } else {
-    //     // No saved phone - start standard process
-    //     b.HandleStart(ctx, chatID)
-    // }
+
 }

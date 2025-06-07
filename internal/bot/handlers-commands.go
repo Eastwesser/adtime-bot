@@ -9,14 +9,14 @@ import (
 )
 
 func (b *Bot) HandleStart(ctx context.Context, chatID int64) {
-	// Проверяем, есть ли уже согласие
+	// Check signed TPA
 	agreed, phone, err := b.storage.GetUserAgreement(ctx, chatID)
 	if err != nil {
 		b.logger.Error("Failed to check user agreement", zap.Error(err))
 	}
 
 	if agreed && phone != "" {
-		// Пользователь уже соглашался - показываем главное меню
+		// If user has signed TPA, show menu
 		b.ShowMainMenu(ctx, chatID, phone)
 		return
 	}
@@ -85,48 +85,6 @@ func (b *Bot) ShowMainMenu(ctx context.Context, chatID int64, phone string) {
         // Consider adding retry logic here if needed
     }
 }
-
-// // ShowMainMenu displays the main menu with options for authenticated users
-// func (b *Bot) ShowMainMenu(ctx context.Context, chatID int64, phone string) {
-//     // Clear any previous state while keeping the phone number
-//     if err := b.state.ResetOrderState(ctx, chatID); err != nil {
-//         b.logger.Error("Failed to reset order state",
-//             zap.Int64("chat_id", chatID),
-//             zap.Error(err))
-//     }
-	
-// 	// Save phone number in state in case user starts new order
-//     if err := b.state.SetPhoneNumber(ctx, chatID, phone); err != nil {
-//         b.logger.Error("Failed to set phone number in state",
-//             zap.Int64("chat_id", chatID),
-//             zap.Error(err))
-//     }
-
-// 	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
-//         "🏠 *Главное меню*\n\n"+
-//             "Ваш контактный номер: %s\n"+
-//             "Выберите действие:",
-//         FormatPhoneNumber(phone)))
-    
-//     msg.ReplyMarkup = b.CreateMainMenuKeyboard()
-//     msg.ParseMode = "Markdown"
-//     b.SendMessage(msg)
-
-//     // // Prepare menu message
-//     // msg := tgbotapi.NewMessage(chatID, "🏠 *Главное меню*\n\n"+
-//     //     "Здесь вы можете создать новый заказ или посмотреть историю своих заказов.\n"+
-//     //     fmt.Sprintf("Ваш контактный номер: %s", FormatPhoneNumber(phone)))
-    
-//     // msg.ReplyMarkup = b.CreateMainMenuKeyboard()
-//     // msg.ParseMode = "Markdown"
-    
-//     // // Send the message
-//     // if _, err := b.bot.Send(msg); err != nil {
-//     //     b.logger.Error("Failed to send main menu",
-//     //         zap.Int64("chat_id", chatID),
-//     //         zap.Error(err))
-//     // }
-// }
 
 func (b *Bot) ShowPrivacyPolicy(chatID int64) {
 

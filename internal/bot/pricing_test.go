@@ -22,12 +22,6 @@ func TestCalculatePrice(t *testing.T) {
             prices["leather_cost"], expectedLeatherCost)
     }
     
-    // // Add more test cases for other calculations
-    // expectedFinalPrice := 1406.25 // (400 + 500) * 2.5
-    // if prices["final_price"] != expectedFinalPrice {
-    //     t.Errorf("Incorrect final price, got %.2f, want %.2f",
-    //         prices["final_price"], expectedFinalPrice)
-    // }
 }
 
 func TestCalculatePrice_InvalidInput(t *testing.T) {

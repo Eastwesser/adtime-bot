@@ -504,10 +504,6 @@ func (s *PostgresStorage) UpdateOrderStatus(ctx context.Context, orderID int64, 
 
 	f.SetActiveSheet(index)
 
-	// const query = `UPDATE orders SET status = $1 WHERE id = $2`
-	// _, err := s.db.ExecContext(ctx, query, status, orderID)
-	// return err
-
 	// Создаем папку если не существует
 	if err := os.MkdirAll("reports", 0755); err != nil {
 		return fmt.Errorf("failed to create reports directory: %w", err)

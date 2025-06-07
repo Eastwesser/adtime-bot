@@ -13,15 +13,15 @@ type PricingConfig struct {
     MarkupMultiplier      float64
 }
 
-// func NewDefaultPricing() PricingConfig {
-//     return PricingConfig{
-//         LeatherPricePerDM2:    25.0,
-//         ProcessingCostPerDM2:  31.25, // 1000₽/3200cm² = 0.3125₽/cm² → 31.25₽/dm²
-//         PaymentCommissionRate: 0.03,
-//         SalesTaxRate:          0.06,
-//         MarkupMultiplier:      2.5, // Empirical from our table
-//     }
-// }
+func NewDefaultPricing() PricingConfig {
+    return PricingConfig{
+        LeatherPricePerDM2:    25.0,
+        ProcessingCostPerDM2:  31.25, // 1000₽/3200cm² = 0.3125₽/cm² → 31.25₽/dm²
+        PaymentCommissionRate: 0.03,
+        SalesTaxRate:          0.06,
+        MarkupMultiplier:      2.5, // Empirical from our table
+    }
+}
 
 func NewPricingConfig(texturePrice float64, cfg *config.Config) PricingConfig {
     return PricingConfig{

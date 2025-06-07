@@ -213,12 +213,6 @@ func (s *StateStorage) SaveOrderState(ctx context.Context, chatID int64) error {
 	return s.ResetOrderState(ctx, chatID)
 }
 
-// func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
-// 	return s.Save(ctx, chatID, UserState{
-// 		Step: StepPrivacyAgreement,
-// 	})
-// }
-
 func (s *StateStorage) ResetOrderState(ctx context.Context, chatID int64) error {
     // Get current state to preserve phone number
     currentState, err := s.Get(ctx, chatID)

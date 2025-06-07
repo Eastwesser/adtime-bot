@@ -257,59 +257,27 @@ If you want to see the order with ID 1:
 SELECT * FROM orders WHERE id = 1;
 ```
 
-# === RUN MANUALLY ===
+## === RUN MANUALLY ===
+
+### 1. First, Clean Up and Rebuild
 ```bash
-TELEGRAM_TOKEN=token make docker-build docker-up
+# Stop and remove old containers
+docker-compose down -v
+```
 
-docker-compose down
-
+# Rebuild with fresh environment
+```bash
 docker-compose up -d --build
 ```
 
-
-
-
-docker-compose up -d --build
-
-docker-compose logs -f bot
-
-docker-compose exec postgres psql -U postgres -d adtime
-
-SELECT * FROM orders;
-SELECT * FROM textures;
-
-REDIS DROPSTATE
-docker-compose exec redis redis-cli FLUSHALL
-
-docker-compose up migrator
-
-Uhmm, not sure
-docker-compose exec postgres psql -U postgres -d adtime -c "
-INSERT INTO textures (id, name, price_per_dm2, in_stock) VALUES 
-('11111111-1111-1111-1111-111111111111', 'Натуральная кожа', 25.0, true),
-('22222222-2222-2222-2222-222222222222', 'Искусственная кожа', 15.5, true);"
-
-
-=== REBUILD ===
-
-1. First, Clean Up and Rebuild
-bash
-
-# Stop and remove old containers
-docker-compose down -v
-
-# Rebuild with fresh environment
-docker-compose up -d --build
-
-2. Apply Database Migrations
-bash
-
+### 2. Apply Database Migrations
+```bash
 # Run migrations separately to ensure they complete
 docker-compose run --rm migrator
+```
 
-3. Seed Initial Data
-bash
-
+### 3. Seed Initial Data
+```bash
 # Insert texture data (this matches your pricing logic)
 docker-compose exec postgres psql -U postgres -d adtime -c "
 INSERT INTO textures (id, name, price_per_dm2, in_stock) VALUES 
@@ -320,6 +288,9 @@ ON CONFLICT (id) DO NOTHING;"
 docker-compose exec redis redis-cli FLUSHALL
 
 docker-compose exec postgres psql -U postgres -d adtime -c "SELECT * FROM textures;"
+```
 
-MONITORING
+### MONITORING
+```bash
 docker-compose logs -f bot
+```
