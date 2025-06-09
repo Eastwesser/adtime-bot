@@ -10,7 +10,9 @@ import (
 
 type Config struct {
 	Telegram struct {
-		Token string `env:"TELEGRAM_TOKEN,required"`
+		Token      string `yaml:"token" env:"TELEGRAM_TOKEN"`
+		WebhookURL string `yaml:"webhook_url" env:"TELEGRAM_WEBHOOK_URL"`
+		ListenAddr string `yaml:"listen_addr" env:"TELEGRAM_LISTEN_ADDR" default:":8080"`
 	}
 
 	Redis struct {

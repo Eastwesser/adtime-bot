@@ -6,6 +6,7 @@ import (
 	"adtime-bot/pkg/redis"
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,17 @@ type Bot struct {
 	cfg      *config.Config
 	mu       sync.Mutex
 	handlers map[string]func(context.Context, int64, string)
+	server   *http.Server
+    amocrmWebhookSecret string
+}
+
+func (b *Bot) HandleNewLead(context context.Context, lead struct {
+	ID     int    "json:\"id\""
+	Name   string "json:\"name\""
+	Phone  string "json:\"phone\""
+	UserID int    "json:\"user_id\""
+}) {
+	panic("unimplemented")
 }
 
 func New(
@@ -33,7 +45,9 @@ func New(
 	pgStorage *storage.PostgresStorage,
 	logger *zap.Logger,
 	cfg *config.Config,
+    amocrmWebhookSecret string,
 ) (*Bot, error) {
+    
 	botAPI, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bot API: %w", err)
@@ -53,14 +67,16 @@ func New(
 		cfg:     cfg,
 	}
 
+    b.amocrmWebhookSecret = amocrmWebhookSecret
+
 	b.RegisterHandlers()
 	return b, nil
 }
 
 func (b *Bot) RegisterHandlers() {
-    b.handlers = map[string]func(context.Context, int64, string){
-        StepPrivacyAgreement: b.HandlePrivacyAgreement,
-        StepServiceSelection: b.HandleServiceSelection,
+	b.handlers = map[string]func(context.Context, int64, string){
+		StepPrivacyAgreement: b.HandlePrivacyAgreement,
+		StepServiceSelection: b.HandleServiceSelection,
 		StepServiceType:      b.HandleServiceType,
 		StepDimensions:       b.HandleDimensionsSize,
 		StepDateSelection:    b.HandleDateSelection,
@@ -71,192 +87,275 @@ func (b *Bot) RegisterHandlers() {
 	}
 }
 
-func (b *Bot) Start(ctx context.Context) error {
-	b.logger.Info("Starting bot")
+// func (b *Bot) Start(ctx context.Context) error {
+// 	b.logger.Info("Starting bot")
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-	updates := b.bot.GetUpdatesChan(u)
+// 	u := tgbotapi.NewUpdate(0)
+// 	u.Timeout = 60
+// 	updates := b.bot.GetUpdatesChan(u)
 
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			b.logger.Info("Shutting down bot")
+// 			return nil
+
+// 		case update := <-updates:
+// 			b.mu.Lock()
+// 			if update.Message != nil {
+// 				b.ProcessMessage(ctx, update.Message)
+// 			} else if update.CallbackQuery != nil {
+// 				b.ProcessCallback(ctx, update.CallbackQuery)
+// 			}
+// 			b.mu.Unlock()
+// 		}
+// 	}
+// }
+
+func (b *Bot) StartWebhook(ctx context.Context, webhookURL string, listenAddr string) error {
+	b.logger.Info("Setting up webhook",
+		zap.String("url", webhookURL),
+		zap.String("listen_addr", listenAddr))
+
+	// Delete any existing webhook first
+	if _, err := b.bot.Request(tgbotapi.DeleteWebhookConfig{}); err != nil {
+		return fmt.Errorf("failed to delete webhook: %w", err)
+	}
+
+	// Set new webhook with a secret token for security
+	secretToken := b.cfg.Telegram.WebhookSecret
+	webhookCfg := tgbotapi.NewWebhookWithCert(webhookURL, nil)
+	webhookCfg.SecretToken = secretToken
+
+	if _, err := b.bot.Request(webhookCfg); err != nil {
+		return fmt.Errorf("failed to set webhook: %w", err)
+	}
+
+	// Create HTTP server
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if secretToken != "" && r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != secretToken {
+			b.logger.Warn("Unauthorized webhook access attempt")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	b.server = &http.Server{
+		Addr:    listenAddr,
+		Handler: mux,
+	}
+
+	// Start HTTP server in a goroutine
+	go func() {
+		if err := b.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			b.logger.Fatal("HTTP server error", zap.Error(err))
+		}
+	}()
+
+	// Get updates channel from webhook
+	updates := b.bot.ListenForWebhook("/")
+
+	// Process updates
 	for {
 		select {
 		case <-ctx.Done():
 			b.logger.Info("Shutting down bot")
-			return nil
-
+			return b.shutdownWebhook(ctx)
 		case update := <-updates:
-			b.mu.Lock()
-			if update.Message != nil {
-				b.ProcessMessage(ctx, update.Message)
-			} else if update.CallbackQuery != nil {
-				b.ProcessCallback(ctx, update.CallbackQuery)
-			}
-			b.mu.Unlock()
+			b.processUpdate(ctx, update)
 		}
 	}
 }
 
-func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
-    
-    chatID := message.Chat.ID
-
-    
-	// Handle contact sharing first
-    if message.Contact != nil {
-        // Normalize the phone number first
-        normalized := NormalizePhoneNumber(message.Contact.PhoneNumber)
-        if !IsValidPhoneNumber(normalized) {
-            b.SendError(chatID, "Пожалуйста, предоставьте действительный номер телефона")
-            return
-        }
-        
-        // Skip phone number input step and proceed to create order
-        _, err := b.CreateOrder(ctx, chatID, normalized)
-        if err != nil {
-            b.logger.Error("Failed to create order from contact",
-                zap.Int64("chat_id", chatID),
-                zap.Error(err))
-            b.SendError(chatID, "Ошибка при оформлении заказа")
-            return
-        }
-
-        // Just clear state without sending another message
-        b.state.ClearState(ctx, chatID)
-        return
+func (b *Bot) shutdownWebhook(ctx context.Context) error {
+	if b.server != nil {
+		b.logger.Info("Shutting down HTTP server")
+		if err := b.server.Shutdown(ctx); err != nil {
+			return fmt.Errorf("failed to shutdown HTTP server: %w", err)
+		}
 	}
-    
-    if message.IsCommand() {
-        // Split command and arguments
-        cmd := message.Command()
-        args := strings.Fields(message.CommandArguments())
-        
-        // First check if it's an admin command
-        if b.IsAdmin(chatID) {
-            b.HandleAdminCommand(ctx, chatID, cmd, args)
-            return
-        }
-        
-        // Handle regular user commands
-        switch cmd {
-        case "start":
-            b.HandleStart(ctx, chatID)
-        case "help":
-            b.HandleHelp(ctx, chatID)
-        case "new_order":
-            b.HandleNewOrder(ctx, chatID)
-        default:
-            b.HandleUnknownCommand(ctx, chatID)
-        }
-        return
-        
-    }
 
-    // Add handling for "New Order" button
-    if message.Text == "🆕 Новый заказ" {
-        b.HandleNewOrder(ctx, chatID)
-        return
-    }
+	// Delete webhook on shutdown
+	if _, err := b.bot.Request(tgbotapi.DeleteWebhookConfig{}); err != nil {
+		return fmt.Errorf("failed to delete webhook: %w", err)
+	}
 
-    // Handle regular messages
-    step, err := b.state.GetStep(ctx, chatID)
-    if err != nil {
-        b.logger.Error("Failed to get user step", zap.Error(err))
-        return
-    }
+	return nil
+}
 
-    // Добавляем обработку кастомной текстуры
-    if step == CustomTextureInput {
-        b.HandleCustomTextureInput(ctx, chatID, message.Text)
-        return
-    }
+func (b *Bot) processUpdate(ctx context.Context, update tgbotapi.Update) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-    // Special case for texture selection from reply keyboard
-    if step == StepTextureSelection {
-        b.HandleTextureSelectionMessage(ctx, chatID, message.Text)
-        return
-    }
+	if update.Message != nil {
+		b.ProcessMessage(ctx, update.Message)
+	} else if update.CallbackQuery != nil {
+		b.ProcessCallback(ctx, update.CallbackQuery)
+	}
+}
 
-    if handler, ok := b.handlers[step]; ok {
-        handler(ctx, chatID, message.Text)
-    } else {
-        b.HandleDefault(ctx, chatID)
-    }
+func (b *Bot) ProcessMessage(ctx context.Context, message *tgbotapi.Message) {
+
+	chatID := message.Chat.ID
+
+	// Handle contact sharing first
+	if message.Contact != nil {
+		// Normalize the phone number first
+		normalized := NormalizePhoneNumber(message.Contact.PhoneNumber)
+		if !IsValidPhoneNumber(normalized) {
+			b.SendError(chatID, "Пожалуйста, предоставьте действительный номер телефона")
+			return
+		}
+
+		// Skip phone number input step and proceed to create order
+		_, err := b.CreateOrder(ctx, chatID, normalized)
+		if err != nil {
+			b.logger.Error("Failed to create order from contact",
+				zap.Int64("chat_id", chatID),
+				zap.Error(err))
+			b.SendError(chatID, "Ошибка при оформлении заказа")
+			return
+		}
+
+		// Just clear state without sending another message
+		b.state.ClearState(ctx, chatID)
+		return
+	}
+
+	if message.IsCommand() {
+		// Split command and arguments
+		cmd := message.Command()
+		args := strings.Fields(message.CommandArguments())
+
+		// First check if it's an admin command
+		if b.IsAdmin(chatID) {
+			b.HandleAdminCommand(ctx, chatID, cmd, args)
+			return
+		}
+
+		// Handle regular user commands
+		switch cmd {
+		case "start":
+			b.HandleStart(ctx, chatID)
+		case "help":
+			b.HandleHelp(ctx, chatID)
+		case "new_order":
+			b.HandleNewOrder(ctx, chatID)
+		default:
+			b.HandleUnknownCommand(ctx, chatID)
+		}
+		return
+
+	}
+
+	// Add handling for "New Order" button
+	if message.Text == "🆕 Новый заказ" {
+		b.HandleNewOrder(ctx, chatID)
+		return
+	}
+
+	// Handle regular messages
+	step, err := b.state.GetStep(ctx, chatID)
+	if err != nil {
+		b.logger.Error("Failed to get user step", zap.Error(err))
+		return
+	}
+
+	// Добавляем обработку кастомной текстуры
+	if step == CustomTextureInput {
+		b.HandleCustomTextureInput(ctx, chatID, message.Text)
+		return
+	}
+
+	// Special case for texture selection from reply keyboard
+	if step == StepTextureSelection {
+		b.HandleTextureSelectionMessage(ctx, chatID, message.Text)
+		return
+	}
+
+	if handler, ok := b.handlers[step]; ok {
+		handler(ctx, chatID, message.Text)
+	} else {
+		b.HandleDefault(ctx, chatID)
+	}
 }
 
 func (b *Bot) ProcessCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-    chatID := callback.Message.Chat.ID
-    
-    switch {
-    case strings.HasPrefix(callback.Data, "texture:"):
-        b.HandleTextureSelection(ctx, callback)
-    case callback.Data == "cancel":
-        b.HandleCancel(ctx, chatID)
-    case strings.HasPrefix(callback.Data, "status:"):
-        parts := strings.Split(callback.Data, ":")
-        b.HandleStatusUpdate(ctx, callback.Message.Chat.ID, parts[1], parts[2])    
-    default:
-        b.logger.Warn("Unknown callback received",
-            zap.String("callback_data", callback.Data),
-            zap.Int64("chat_id", chatID),
-            zap.Int("message_id", callback.Message.MessageID),
-            zap.String("user", callback.From.UserName))
-        b.SendError(chatID, "Неизвестная команда")
-    }
+	chatID := callback.Message.Chat.ID
+
+	switch {
+	case strings.HasPrefix(callback.Data, "texture:"):
+		b.HandleTextureSelection(ctx, callback)
+	case callback.Data == "cancel":
+		b.HandleCancel(ctx, chatID)
+	case strings.HasPrefix(callback.Data, "status:"):
+		parts := strings.Split(callback.Data, ":")
+		b.HandleStatusUpdate(ctx, callback.Message.Chat.ID, parts[1], parts[2])
+	default:
+		b.logger.Warn("Unknown callback received",
+			zap.String("callback_data", callback.Data),
+			zap.Int64("chat_id", chatID),
+			zap.Int("message_id", callback.Message.MessageID),
+			zap.String("user", callback.From.UserName))
+		b.SendError(chatID, "Неизвестная команда")
+	}
 }
 
 func (b *Bot) HandleAdminStatusUpdate(ctx context.Context, chatID int64, orderIDStr, action string) {
-    if !b.IsAdmin(chatID) {
-        b.SendError(chatID, "❌ У вас нет прав для этого действия")
-        return
-    }
+	if !b.IsAdmin(chatID) {
+		b.SendError(chatID, "❌ У вас нет прав для этого действия")
+		return
+	}
 
-    orderID, err := strconv.ParseInt(orderIDStr, 10, 64)
-    if err != nil {
-        b.SendError(chatID, "❌ Неверный ID заказа")
-        return
-    }
+	orderID, err := strconv.ParseInt(orderIDStr, 10, 64)
+	if err != nil {
+		b.SendError(chatID, "❌ Неверный ID заказа")
+		return
+	}
 
-    var newStatus string
-    switch action {
-    case "processing":
-        newStatus = "processing"
-    case "cancelled":
-        newStatus = "cancelled"
-    default:
-        b.SendError(chatID, "❌ Неизвестное действие")
-        return
-    }
+	var newStatus string
+	switch action {
+	case "processing":
+		newStatus = "processing"
+	case "cancelled":
+		newStatus = "cancelled"
+	default:
+		b.SendError(chatID, "❌ Неизвестное действие")
+		return
+	}
 
-    err = b.storage.UpdateOrderStatus(ctx, orderID, newStatus)
-    if err != nil {
-        b.logger.Error("Failed to update order status", zap.Error(err))
-        b.SendError(chatID, "❌ Ошибка при обновлении статуса")
-        return
-    }
+	err = b.storage.UpdateOrderStatus(ctx, orderID, newStatus)
+	if err != nil {
+		b.logger.Error("Failed to update order status", zap.Error(err))
+		b.SendError(chatID, "❌ Ошибка при обновлении статуса")
+		return
+	}
 
-    // Отправляем подтверждение админу
-    b.SendMessage(tgbotapi.NewMessage(chatID, fmt.Sprintf(
-        "✅ Статус заказа #%d изменён на: %s",
-        orderID,
-        map[string]string{
-            "processing": "В обработке",
-            "cancelled": "Отменён",
-        }[newStatus],
-    )))
+	// Отправляем подтверждение админу
+	b.SendMessage(tgbotapi.NewMessage(chatID, fmt.Sprintf(
+		"✅ Статус заказа #%d изменён на: %s",
+		orderID,
+		map[string]string{
+			"processing": "В обработке",
+			"cancelled":  "Отменён",
+		}[newStatus],
+	)))
 
-    // Уведомляем пользователя
-    order, err := b.storage.GetOrderByID(ctx, orderID)
-    if err == nil {
-        userMsg := tgbotapi.NewMessage(order.UserID, fmt.Sprintf(
-            "ℹ️ Статус вашего заказа #%d изменён на: %s",
-            orderID,
-            map[string]string{
-                "processing": "В обработке",
-                "cancelled": "Отменён",
-            }[newStatus],
-        ))
-        b.SendMessage(userMsg)
-    }
+	// Уведомляем пользователя
+	order, err := b.storage.GetOrderByID(ctx, orderID)
+	if err == nil {
+		userMsg := tgbotapi.NewMessage(order.UserID, fmt.Sprintf(
+			"ℹ️ Статус вашего заказа #%d изменён на: %s",
+			orderID,
+			map[string]string{
+				"processing": "В обработке",
+				"cancelled":  "Отменён",
+			}[newStatus],
+		))
+		b.SendMessage(userMsg)
+	}
 }
 
 func (b *Bot) SendError(chatID int64, text string) {
@@ -265,16 +364,15 @@ func (b *Bot) SendError(chatID int64, text string) {
 }
 
 func (b *Bot) IsAdmin(chatID int64) bool {
-    // Add debug logging
-    b.logger.Debug("Admin check",
-        zap.Int64("chatID", chatID),
-        zap.Int64("configAdminID", b.cfg.Admin.ChatID),
-        zap.Any("adminIDs", b.cfg.Admin.IDs))
-    
-    // Check both the main admin and additional admins
-    return chatID == b.cfg.Admin.ChatID || slices.Contains(b.cfg.Admin.IDs, chatID)
-}
+	// Add debug logging
+	b.logger.Debug("Admin check",
+		zap.Int64("chatID", chatID),
+		zap.Int64("configAdminID", b.cfg.Admin.ChatID),
+		zap.Any("adminIDs", b.cfg.Admin.IDs))
 
+	// Check both the main admin and additional admins
+	return chatID == b.cfg.Admin.ChatID || slices.Contains(b.cfg.Admin.IDs, chatID)
+}
 
 // other commands
 
@@ -283,38 +381,49 @@ func (b *Bot) ExportOrdersToSingleFile(ctx context.Context) error {
 	return b.storage.ExportAllOrdersToExcel(ctx, filename)
 }
 
-func (b *Bot) SendMessage(msg tgbotapi.MessageConfig) {
+// func (b *Bot) SendMessage(msg tgbotapi.MessageConfig) {
 
-    // Send new message
-    sentMsg, err := b.bot.Send(msg)
-    if err != nil {
-        b.logger.Error("Failed to send message",
-            zap.Int64("chatID", msg.ChatID),
-            zap.String("text", msg.Text),
-            zap.Error(err))
-        return
-    }
-    
-    // Store the new message ID (no error check needed if function doesn't return error)
-    b.state.SetLastBotMessageID(context.Background(), msg.ChatID, sentMsg.MessageID)
+//     // Send new message
+//     sentMsg, err := b.bot.Send(msg)
+//     if err != nil {
+//         b.logger.Error("Failed to send message",
+//             zap.Int64("chatID", msg.ChatID),
+//             zap.String("text", msg.Text),
+//             zap.Error(err))
+//         return
+//     }
+
+//     // Store the new message ID (no error check needed if function doesn't return error)
+//     b.state.SetLastBotMessageID(context.Background(), msg.ChatID, sentMsg.MessageID)
+// }
+
+func (b *Bot) SendMessage(msg tgbotapi.MessageConfig) {
+	const maxRetries = 3
+	for i := 0; i < maxRetries; i++ {
+		if _, err := b.bot.Send(msg); err == nil {
+			return
+		}
+		time.Sleep(time.Second * time.Duration(i+1))
+	}
+	b.logger.Error("Failed after retries", zap.Any("message", msg))
 }
 
 func (b *Bot) DeletePreviousBotMessage(chatID int64) {
-    msgID, err := b.state.GetLastBotMessageID(context.Background(), chatID)
-    if err != nil {
-        b.logger.Warn("Failed to get last message ID",
-            zap.Int64("chat_id", chatID),
-            zap.Error(err))
-        return
-    }
-    
-    if msgID > 0 {
-        delMsg := tgbotapi.NewDeleteMessage(chatID, msgID)
-        if _, err := b.bot.Send(delMsg); err != nil {
-            b.logger.Warn("Failed to delete previous message",
-                zap.Int64("chat_id", chatID),
-                zap.Int("message_id", msgID),
-                zap.Error(err))
-        }
-    }
+	msgID, err := b.state.GetLastBotMessageID(context.Background(), chatID)
+	if err != nil {
+		b.logger.Warn("Failed to get last message ID",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err))
+		return
+	}
+
+	if msgID > 0 {
+		delMsg := tgbotapi.NewDeleteMessage(chatID, msgID)
+		if _, err := b.bot.Send(delMsg); err != nil {
+			b.logger.Warn("Failed to delete previous message",
+				zap.Int64("chat_id", chatID),
+				zap.Int("message_id", msgID),
+				zap.Error(err))
+		}
+	}
 }
